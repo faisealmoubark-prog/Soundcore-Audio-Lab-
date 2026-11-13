@@ -2,7 +2,7 @@
 (() => {
 const $ = id => document.getElementById(id);
 const DB_NAME='soundcore-audio-lab-v2';
-let db=null, active=null, activeTab='original', ctx=null, mediaSource=null, eqNodes=[], bassShelf=null, bassDynamic=null, deesserNode=null, compressorNode=null, limiterNode=null, masterNode=null, widthNodes=null, analyser=null, raf=0, originalBlob=null;
+let db=null, active=null, activeTab='original', ctx=null, mediaSource=null, eqNodes=[], bassShelf=null, bassDynamic=null, deesserNode=null, compressorNode=null, limiterNode=null, masterNode=null, widthNodes=null, analyser=null, outputLimiter=null, raf=0, originalBlob=null;
 const bandDefaults=[60,120,250,500,1000,2000,4000,8000];
 const bands=bandDefaults.map((freq,i)=>({freq,gain:0,q:1}));
 const profileData={
@@ -59,6 +59,7 @@ function ensureGraph(){
   ll.connect(merger,0,0);rl.connect(merger,0,0);lr.connect(merger,0,1);rr.connect(merger,0,1);
   merger.connect(ctx.destination);
   widthNodes={ll,lr,rl,rr};
+  outputLimiter=ctx.createDynamicsCompressor();outputLimiter.threshold.value=-1;outputLimiter.knee.value=0;outputLimiter.ratio.value=20;outputLimiter.attack.value=.001;outputLimiter.release.value=.08;merger.connect(outputLimiter);outputLimiter.connect(ctx.destination);
   applyAudio();return true;
  }catch(e){
   try{if(mediaSource&&ctx)mediaSource.connect(ctx.destination)}catch(_){}
@@ -142,7 +143,7 @@ async function exportWav(){
   const de=off.createBiquadFilter();de.type='highshelf';de.frequency.value=6500;de.gain.value=-settings.deesser;
   const comp=off.createDynamicsCompressor();comp.ratio.value=settings.compressor;comp.threshold.value=-18;comp.knee.value=8;comp.attack.value=.006;comp.release.value=.18;
   const lim=off.createDynamicsCompressor();lim.threshold.value=settings.limiter;lim.knee.value=0;lim.ratio.value=20;lim.attack.value=.002;lim.release.value=.1;
-  const master=off.createGain();master.gain.value=settings.master*settings.volume;src.connect(eq[0]);eq.forEach((n,i)=>n.connect(eq[i+1]||bass));bass.connect(de);de.connect(comp);comp.connect(master);master.connect(lim);const split=off.createChannelSplitter(2),merge=off.createChannelMerger(2);split.channelCount=2;split.channelCountMode='explicit';split.channelInterpretation='speakers';const w=Math.max(0,Math.min(2,settings.width));const ll=off.createGain(),lr=off.createGain(),rl=off.createGain(),rr=off.createGain();ll.gain.value=(1+w)/2;rr.gain.value=(1+w)/2;lr.gain.value=(1-w)/2;rl.gain.value=(1-w)/2;const upmix=off.createGain();upmix.channelCount=2;upmix.channelCountMode='explicit';upmix.channelInterpretation='speakers';upmix.connect(split);lim.connect(upmix);split.connect(ll,0);split.connect(lr,0);split.connect(rl,1);split.connect(rr,1);ll.connect(merge,0,0);rl.connect(merge,0,0);lr.connect(merge,0,1);rr.connect(merge,0,1);merge.connect(off.destination);src.start();
+  const master=off.createGain();master.gain.value=settings.master*settings.volume;src.connect(eq[0]);eq.forEach((n,i)=>n.connect(eq[i+1]||bass));bass.connect(de);de.connect(comp);comp.connect(master);master.connect(lim);const split=off.createChannelSplitter(2),merge=off.createChannelMerger(2);split.channelCount=2;split.channelCountMode='explicit';split.channelInterpretation='speakers';const w=Math.max(0,Math.min(2,settings.width));const ll=off.createGain(),lr=off.createGain(),rl=off.createGain(),rr=off.createGain();ll.gain.value=(1+w)/2;rr.gain.value=(1+w)/2;lr.gain.value=(1-w)/2;rl.gain.value=(1-w)/2;const upmix=off.createGain();upmix.channelCount=2;upmix.channelCountMode='explicit';upmix.channelInterpretation='speakers';upmix.connect(split);lim.connect(upmix);split.connect(ll,0);split.connect(lr,0);split.connect(rl,1);split.connect(rr,1);ll.connect(merge,0,0);rl.connect(merge,0,0);lr.connect(merge,0,1);rr.connect(merge,0,1);const outLimit=off.createDynamicsCompressor();outLimit.threshold.value=-1;outLimit.knee.value=0;outLimit.ratio.value=20;outLimit.attack.value=.001;outLimit.release.value=.08;merge.connect(outLimit);outLimit.connect(off.destination);src.start();
   const rendered=await off.startRendering();const blob=new Blob([encodeWav(rendered)],{type:'audio/wav'});const item={id:uid(),name:active.name.replace(/\.[^.]+$/,'')+'-processed.wav',size:blob.size,type:'audio/wav',blob,created:Date.now()};await store('edited',item);
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=item.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
   status('اكتمل تصدير WAV وحُفظت نسخة في المحفوظات المعدّلة');renderLibrary();
