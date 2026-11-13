@@ -53,11 +53,10 @@ function ensureGraph(){
   const splitter=ctx.createChannelSplitter(2),merger=ctx.createChannelMerger(2);splitter.channelCount=2;splitter.channelCountMode='explicit';splitter.channelInterpretation='speakers';
   const ll=ctx.createGain(),lr=ctx.createGain(),rl=ctx.createGain(),rr=ctx.createGain();
   mediaSource.connect(eqNodes[0]);eqNodes.forEach((n,i)=>n.connect(eqNodes[i+1]||bassShelf));
-  bassShelf.connect(deesserNode);eqNodes[eqNodes.length-1].connect(bassDynamicFilter);bassDynamicFilter.connect(bassDynamic);bassDynamic.connect(deesserNode);deesserNode.connect(compressorNode);compressorNode.connect(limiterNode);masterNode.connect(limiterNode);limiterNode.connect(analyser);
+  bassShelf.connect(deesserNode);eqNodes[eqNodes.length-1].connect(bassDynamicFilter);bassDynamicFilter.connect(bassDynamic);bassDynamic.connect(deesserNode);deesserNode.connect(compressorNode);compressorNode.connect(masterNode);masterNode.connect(limiterNode);limiterNode.connect(analyser);
   const upmix=ctx.createGain();upmix.channelCount=2;upmix.channelCountMode='explicit';upmix.channelInterpretation='speakers';analyser.connect(upmix);upmix.connect(splitter);
   splitter.connect(ll,0);splitter.connect(lr,0);splitter.connect(rl,1);splitter.connect(rr,1);
   ll.connect(merger,0,0);rl.connect(merger,0,0);lr.connect(merger,0,1);rr.connect(merger,0,1);
-  merger.connect(ctx.destination);
   widthNodes={ll,lr,rl,rr};
   outputLimiter=ctx.createDynamicsCompressor();outputLimiter.threshold.value=-1;outputLimiter.knee.value=0;outputLimiter.ratio.value=20;outputLimiter.attack.value=.001;outputLimiter.release.value=.08;merger.connect(outputLimiter);outputLimiter.connect(ctx.destination);
   applyAudio();return true;
