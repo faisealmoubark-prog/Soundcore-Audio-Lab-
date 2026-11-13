@@ -1,29 +1,26 @@
 # Soundcore Audio Lab
 
-Arabic RTL, mobile-first browser audio laboratory reconstructed from the currently published application at https://soundcore-audio-lab-rebuilt.vercel.app.
+Arabic RTL, mobile-first browser audio laboratory. This branch contains the expanded DSP implementation while preserving the existing local-file workflow and IndexedDB library.
 
-## Included application
-- Local audio file selection and playback (MP3, M4A, AAC, WAV, OGG, FLAC where supported by the browser).
-- Live five-band EQ using the Web Audio API.
-- Flat, Bass Boost, Vocal Clarity, and Soundcore A20i presets.
-- Additional bass gain and dynamics-compressor clipping protection.
-- Export of processed audio as WAV using OfflineAudioContext.
-- Local IndexedDB libraries for original and processed files.
-- JSON backup export/import for the local libraries.
-- Arabic RTL responsive interface with iPhone safe-area support.
+## Audio features
+- Local audio selection and playback in the browser (codec support depends on Safari/browser).
+- Eight-band parametric EQ with editable center frequency, gain and global Q.
+- Live DSP using the Web Audio API: low-shelf bass enhancement, dynamic bass control, compressor, clipping limiter, de-esser, master gain and stereo-width matrix.
+- Starting DSP profiles for Soundcore A20i, R50i NC, P20i, Life 2 Neo and K20i. These are editable starting points, not official Soundcore calibration or firmware changes.
+- Offline WAV rendering with the EQ and supported DSP chain.
+- Separate local IndexedDB libraries for original and processed files, plus JSON backup export/import.
+- Local-only processing: selected audio is not uploaded to an application server.
 
 ## Run
-This is a static browser application. Open `index.html` from a local static server or deploy the repository to Vercel with the project root set to the repository root. No build step or server-side API is required.
+Static browser app. Deploy the repository root to Vercel; no build step or server-side API is required.
 
 ## Browser and device limitations
-- Audio processing applies to the audio element played by this page, not other apps or system audio.
-- Actual output loudness remains subject to iOS, browser, Bluetooth, and device volume limits.
-- Supported input codecs depend on the browser's media decoder.
-- Local library data is stored in the browser's IndexedDB and may be removed by browser storage cleanup. Export backups for important files.
-- WAV export depends on browser Web Audio API support and available device memory; large files can fail on mobile devices.
-
-## Privacy
-The application processes selected audio locally in the browser. This source does not upload audio files to a server. No API keys or server secrets are required.
+- DSP applies only to audio played by this page, not Spotify, YouTube or system-wide audio.
+- iOS, Safari, Bluetooth devices and the device volume control the final output level.
+- Browser codec support varies. If a file cannot be decoded, try MP3, M4A or WAV.
+- WAV rendering uses device memory and may fail for long/high-resolution tracks on mobile.
+- Background playback depends on iOS/Safari lifecycle behavior and cannot be guaranteed after the browser suspends the page.
+- Local IndexedDB data may be removed by browser storage cleanup. Export backups for important work.
 
 ## Source provenance
-The initial `index.html` was copied from the live public deployment response and checked for the app title, IndexedDB storage, and WAV export implementation before being committed. This is a reconstruction of the published web artifact, not a recovery of the original ProductOS/Expo source project.
+The starting HTML was reconstructed from the published Soundcore Audio Lab page and checked before committing. This repository is a reconstruction of the browser artifact, not a recovery of the original ProductOS/Expo source project.
