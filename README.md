@@ -3,9 +3,9 @@
 Arabic RTL, mobile-first browser audio laboratory. This branch contains the expanded DSP implementation while preserving the existing local-file workflow and IndexedDB library.
 
 ## Audio features
-- Local audio selection and playback in the browser (codec support depends on Safari/browser).
+- Local audio and video selection from iOS Files/Photos pickers and playback in the browser (video support and codecs depend on Safari/browser). Video playback routes its audio through the DSP chain.
 - Eight-band parametric EQ with editable center frequency, gain and global Q.
-- Live DSP using the Web Audio API: low-shelf bass enhancement, adaptive low-frequency dynamic bass, compressor, clipping limiters, high-frequency de-essing, master gain and stereo-width matrix.
+- Live DSP using the Web Audio API: parametric EQ, low-shelf bass enhancement, adaptive low-frequency dynamic bass, compressor, limiter, high-frequency de-essing and master gain. Live output uses a direct stereo-safe path; stereo width is retained for offline WAV rendering while the live channel matrix is withheld pending real-device validation.
 - One-tap A/B comparison between the selected source audio and the live processed signal.
 - Starting DSP profiles for Soundcore A20i, R50i NC, P20i, Life 2 Neo and K20i. These are editable starting points, not official Soundcore calibration or firmware changes.
 - Offline WAV rendering with EQ, bass, de-essing, compression, limiting, gain and stereo width. Dynamic Bass is rendered as its configured low-frequency boost rather than a time-varying adaptive envelope.
@@ -18,7 +18,7 @@ Static browser app. Deploy the repository root to Vercel; no build step or serve
 ## Browser and device limitations
 - DSP applies only to audio played by this page, not Spotify, YouTube or system-wide audio.
 - iOS, Safari, Bluetooth devices and the device volume control the final output level.
-- Browser codec support varies. If a file cannot be decoded, try MP3, M4A or WAV.
+- Browser codec support varies. If a file cannot be decoded, try MP3, M4A or WAV for audio, or MP4/MOV (H.264/AAC) for video. Static photos do not contain an audio track; select a video from Photos.
 - WAV rendering uses device memory and may fail for long/high-resolution tracks on mobile.
 - Background playback depends on iOS/Safari lifecycle behavior and cannot be guaranteed after the browser suspends the page.
 - Local IndexedDB data may be removed by browser storage cleanup. Export backups for important work.
