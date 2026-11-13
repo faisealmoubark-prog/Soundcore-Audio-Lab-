@@ -2,7 +2,7 @@
 (() => {
 const $ = id => document.getElementById(id);
 const DB_NAME='soundcore-audio-lab-v2';
-let db=null, active=null, activeTab='original', ctx=null, mediaSource=null, connectedMediaElement=null, mediaSources=new WeakMap(), activeMediaElement=null, eqNodes=[], bassShelf=null, bassDynamic=null, bassDynamicFilter=null, deesserNode=null, compressorNode=null, limiterNode=null, masterNode=null, widthNodes=null, analyser=null, outputLimiter=null, raf=0, originalBlob=null;
+let db=null, active=null, activeTab='original', ctx=null, mediaSource=null, connectedMediaElement=null, mediaSources=new WeakMap(), activeMediaElement=null, eqNodes=[], bassShelf=null, bassDynamic=null, bassDynamicFilter=null, deesserNode=null, compressorNode=null, limiterNode=null, masterNode=null, widthNodes=null, analyser=null, outputLimiter=null, recordDestination=null, raf=0, originalBlob=null;
 const bandDefaults=[60,120,250,500,1000,2000,4000,8000];
 const bands=bandDefaults.map((freq,i)=>({freq,gain:0,q:1}));
 const profileData={
@@ -52,9 +52,9 @@ function ensureGraph(element=getMediaElement()){
    limiterNode=ctx.createDynamicsCompressor();limiterNode.threshold.value=settings.limiter;limiterNode.knee.value=0;limiterNode.ratio.value=20;limiterNode.attack.value=.002;limiterNode.release.value=.1;
    masterNode=ctx.createGain();analyser=ctx.createAnalyser();analyser.fftSize=1024;mediaSources=new WeakMap();
    eqNodes.forEach((n,i)=>n.connect(eqNodes[i+1]||bassShelf));
-   bassShelf.connect(deesserNode);eqNodes[eqNodes.length-1].connect(bassDynamicFilter);bassDynamicFilter.connect(bassDynamic);bassDynamic.connect(deesserNode);
+   bassShelf.connect(bassDynamicFilter);bassDynamicFilter.connect(bassDynamic);bassDynamic.connect(deesserNode);
    deesserNode.connect(compressorNode);compressorNode.connect(masterNode);masterNode.connect(limiterNode);limiterNode.connect(analyser);
-   analyser.connect(ctx.destination);
+   analyser.connect(ctx.destination);recordDestination=ctx.createMediaStreamDestination();limiterNode.connect(recordDestination);
   }
   if(connectedMediaElement!==element){
    if(mediaSource){try{mediaSource.disconnect()}catch(e){}}
@@ -147,25 +147,121 @@ function toggleAB(){
  if(!abSnapshot){abSnapshot={settings:{...settings},bands:bands.map(b=>({...b}))};bands.forEach(b=>b.gain=0);settings.bass=0;settings.dynamicBass=0;settings.deesser=0;settings.compressor=1;settings.master=1;settings.limiter=0;settings.width=1;renderEQ();syncControls();applyAudio();$('compareAB').textContent='العودة إلى المعالجة';status('وضع A/B: تسمع الأصل دون EQ والمؤثرات');}
  else{settings={...abSnapshot.settings};abSnapshot.bands.forEach((b,i)=>Object.assign(bands[i],b));abSnapshot=null;renderEQ();syncControls();applyAudio();$('compareAB').textContent='مقارنة الأصل / المعالجة A/B';status('تمت العودة إلى إعدادات المعالجة');}
 }
+function downloadBlob(blob,name){
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+}
+async function exportVideoAudioWav(){
+ const video=$('videoPlayer');
+ if(!active||!video.src){status('اختر فيديو أولاً');return}
+ if(!audioSupported()||!window.MediaStream){status('متصفحك لا يدعم التقاط الصوت المعالج من الفيديو');return}
+ if(!ensureGraph(video)||!ctx){status('تعذر تفعيل معالج الصوت للفيديو');return}
+ if(!ctx.createScriptProcessor){status('تسجيل WAV المباشر غير مدعوم في هذا المتصفح');return}
+ if(!Number.isFinite(video.duration)||video.duration<=0){status('انتظر تحميل معلومات الفيديو ثم أعد التصدير');return}
+ if(video.duration>1800){status('الفيديو أطول من 30 دقيقة؛ اختر مقطعاً أقصر لتجنب استهلاك ذاكرة الجهاز أثناء WAV');return}
+ let processor=null,silent=null,chunks=[],channels=2,frames=0,finished=false;
+ try{
+  status('جارٍ تشغيل الفيديو والتقاط الصوت بعد المعالجة لتصديره WAV…');
+  if(ctx.state==='suspended')await ctx.resume();
+  processor=ctx.createScriptProcessor(4096,2,2);silent=ctx.createGain();silent.gain.value=0;
+  processor.onaudioprocess=e=>{
+   const input=e.inputBuffer;channels=Math.max(1,Math.min(2,input.numberOfChannels));
+   for(let c=0;c<channels;c++)chunks.push({c,data:new Float32Array(input.getChannelData(c))});
+   frames+=input.length;
+  };
+  limiterNode.connect(processor);processor.connect(silent);silent.connect(ctx.destination);
+  if(video.ended||video.currentTime>=video.duration-.05)video.currentTime=0;
+  await video.play();
+  await new Promise((resolve,reject)=>{
+   const ended=()=>resolve(),error=()=>reject(new Error('تعذر قراءة مسار الصوت في الفيديو'));
+   video.addEventListener('ended',ended,{once:true});video.addEventListener('error',error,{once:true});
+  });
+  if(finished)return;finished=true;
+  processor.disconnect();silent.disconnect();limiterNode.disconnect(processor);
+  const buffer=ctx.createBuffer(channels,frames,ctx.sampleRate);
+  let offset=0;
+  for(let c=0;c<channels;c++){
+   const target=buffer.getChannelData(c);offset=0;
+   for(const part of chunks){if(part.c===c){target.set(part.data,offset);offset+=part.data.length}}
+  }
+  const blob=new Blob([encodeWav(buffer)],{type:'audio/wav'});
+  const item={id:uid(),name:active.name.replace(/\.[^.]+$/,'')+'-processed.wav',size:blob.size,type:'audio/wav',blob,created:Date.now(),mediaKind:'audio'};
+  await store('edited',item);downloadBlob(blob,item.name);status('اكتمل استخراج الصوت من الفيديو وتصديره WAV وحُفظ في المحفوظات المعدّلة');await renderLibrary();
+ }catch(e){status('فشل تصدير صوت الفيديو: '+(e.message||e))}
+ finally{
+  if(processor){processor.onaudioprocess=null;try{processor.disconnect()}catch(e){}}
+  if(silent)try{silent.disconnect()}catch(e){}
+  if(processor&&limiterNode)try{limiterNode.disconnect(processor)}catch(e){}
+  chunks=[];
+ }
+}
 async function exportWav(){
- if(active&&(active.mediaKind==='video'||(active.type||'').startsWith('video/'))){status('تصدير WAV من الفيديو غير متاح حالياً؛ شغّل الفيديو أو استخرج الصوت كملف صوتي أولاً');return}
- if(abSnapshot){settings={...abSnapshot.settings};abSnapshot.bands.forEach((b,i)=>Object.assign(bands[i],b));abSnapshot=null;renderEQ();syncControls();$('compareAB').textContent='مقارنة الأصل / المعالجة A/B';applyAudio()}
  if(!active){status('اختر ملفاً أولاً');return}
+ if(active.mediaKind==='video'||(active.type||'').startsWith('video/')||isVideoFile(active))return exportVideoAudioWav();
+ if(abSnapshot){settings={...abSnapshot.settings};abSnapshot.bands.forEach((b,i)=>Object.assign(bands[i],b));abSnapshot=null;renderEQ();syncControls();$('compareAB').textContent='مقارنة الأصل / المعالجة A/B';applyAudio()}
  const Offline=window.OfflineAudioContext||window.webkitOfflineAudioContext;if(!Offline){status('هذا المتصفح لا يدعم التصدير الصوتي غير المتصل');return}
- let ac;
  try{
   status('جارٍ تطبيق كل المؤثرات وتجهيز WAV…');const decodedCtx=new (window.AudioContext||window.webkitAudioContext)();const decoded=await decodedCtx.decodeAudioData((await active.blob.arrayBuffer()).slice(0));await decodedCtx.close();
   const off=new Offline(decoded.numberOfChannels,decoded.length,decoded.sampleRate),src=off.createBufferSource();src.buffer=decoded;
   const eq=bands.map(b=>{const n=off.createBiquadFilter();n.type='peaking';n.frequency.value=b.freq;n.Q.value=settings.q;n.gain.value=b.gain;return n});
-  const bass=off.createBiquadFilter();bass.type='lowshelf';bass.frequency.value=100;bass.gain.value=settings.bass;const dynamicFilter=off.createBiquadFilter();dynamicFilter.type='lowpass';dynamicFilter.frequency.value=160;dynamicFilter.Q.value=.7;const dynamicGain=off.createGain();dynamicGain.gain.value=1+settings.dynamicBass/12;
+  const bass=off.createBiquadFilter();bass.type='lowshelf';bass.frequency.value=100;bass.gain.value=settings.bass;
+  const dynamicFilter=off.createBiquadFilter();dynamicFilter.type='lowpass';dynamicFilter.frequency.value=160;dynamicFilter.Q.value=.7;
+  const dynamicGain=off.createGain();dynamicGain.gain.value=1+settings.dynamicBass/12;
   const de=off.createBiquadFilter();de.type='highshelf';de.frequency.value=6500;de.gain.value=-settings.deesser;
   const comp=off.createDynamicsCompressor();comp.ratio.value=settings.compressor;comp.threshold.value=-18;comp.knee.value=8;comp.attack.value=.006;comp.release.value=.18;
   const lim=off.createDynamicsCompressor();lim.threshold.value=settings.limiter;lim.knee.value=0;lim.ratio.value=20;lim.attack.value=.002;lim.release.value=.1;
-  const master=off.createGain();master.gain.value=settings.master*settings.volume;src.connect(eq[0]);eq.forEach((n,i)=>n.connect(eq[i+1]||bass));eq[eq.length-1].connect(dynamicFilter);dynamicFilter.connect(dynamicGain);dynamicGain.connect(de);bass.connect(de);de.connect(comp);comp.connect(master);master.connect(lim);const split=off.createChannelSplitter(2),merge=off.createChannelMerger(2);split.channelCount=2;split.channelCountMode='explicit';split.channelInterpretation='speakers';const w=Math.max(0,Math.min(2,settings.width));const ll=off.createGain(),lr=off.createGain(),rl=off.createGain(),rr=off.createGain();ll.gain.value=(1+w)/2;rr.gain.value=(1+w)/2;lr.gain.value=(1-w)/2;rl.gain.value=(1-w)/2;const upmix=off.createGain();upmix.channelCount=2;upmix.channelCountMode='explicit';upmix.channelInterpretation='speakers';upmix.connect(split);lim.connect(upmix);split.connect(ll,0);split.connect(lr,0);split.connect(rl,1);split.connect(rr,1);ll.connect(merge,0,0);rl.connect(merge,0,0);lr.connect(merge,0,1);rr.connect(merge,0,1);const outLimit=off.createDynamicsCompressor();outLimit.threshold.value=-1;outLimit.knee.value=0;outLimit.ratio.value=20;outLimit.attack.value=.001;outLimit.release.value=.08;merge.connect(outLimit);outLimit.connect(off.destination);src.start();
-  const rendered=await off.startRendering();const blob=new Blob([encodeWav(rendered)],{type:'audio/wav'});const item={id:uid(),name:active.name.replace(/\.[^.]+$/,'')+'-processed.wav',size:blob.size,type:'audio/wav',blob,created:Date.now()};await store('edited',item);
-  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=item.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
-  status('اكتمل تصدير WAV وحُفظت نسخة في المحفوظات المعدّلة');renderLibrary();
+  const master=off.createGain();master.gain.value=settings.master*settings.volume;
+  src.connect(eq[0]);eq.forEach((n,i)=>n.connect(eq[i+1]||bass));bass.connect(dynamicFilter);dynamicFilter.connect(dynamicGain);dynamicGain.connect(de);de.connect(comp);comp.connect(master);master.connect(lim);
+  const split=off.createChannelSplitter(2),merge=off.createChannelMerger(2),upmix=off.createGain();upmix.channelCount=2;upmix.channelCountMode='explicit';upmix.channelInterpretation='speakers';upmix.connect(split);lim.connect(upmix);
+  const w=Math.max(0,Math.min(2,settings.width)),ll=off.createGain(),lr=off.createGain(),rl=off.createGain(),rr=off.createGain();
+  ll.gain.value=(1+w)/2;rr.gain.value=(1+w)/2;lr.gain.value=(1-w)/2;rl.gain.value=(1-w)/2;
+  split.connect(ll,0);split.connect(lr,0);split.connect(rl,1);split.connect(rr,1);ll.connect(merge,0,0);rl.connect(merge,0,0);lr.connect(merge,0,1);rr.connect(merge,0,1);
+  const outLimit=off.createDynamicsCompressor();outLimit.threshold.value=-1;outLimit.knee.value=0;outLimit.ratio.value=20;outLimit.attack.value=.001;outLimit.release.value=.08;merge.connect(outLimit);outLimit.connect(off.destination);
+  src.start();const rendered=await off.startRendering(),blob=new Blob([encodeWav(rendered)],{type:'audio/wav'});
+  const item={id:uid(),name:active.name.replace(/\.[^.]+$/,'')+'-processed.wav',size:blob.size,type:'audio/wav',blob,created:Date.now(),mediaKind:'audio'};
+  await store('edited',item);downloadBlob(blob,item.name);status('اكتمل تصدير WAV وحُفظت نسخة في المحفوظات المعدّلة');renderLibrary();
  }catch(e){status('فشل التصدير: '+(e.message||e)+' — جرّب ملفاً أقصر أو بصيغة WAV/MP3 مدعومة')}
+}
+async function exportProcessedVideo(){
+ const video=$('videoPlayer');
+ if(!active||!(active.mediaKind==='video'||(active.type||'').startsWith('video/')||isVideoFile(active))||!video.src){status('اختر فيديو أولاً');return}
+ if(!window.MediaRecorder||!window.MediaStream||!HTMLCanvasElement.prototype.captureStream){status('تصدير الفيديو غير مدعوم في هذا المتصفح؛ استخدم Safari حديثاً أو افتح الأداة من جهاز يدعم Canvas Capture وMediaRecorder');return}
+ if(!Number.isFinite(video.duration)||video.duration<=0||!video.videoWidth){status('انتظر تحميل الفيديو بالكامل ثم أعد التصدير');return}
+ if(video.duration>1800){status('الفيديو أطول من 30 دقيقة؛ اختر مقطعاً أقصر لتجنب استهلاك ذاكرة الجهاز');return}
+ if(!ensureGraph(video)||!recordDestination){status('تعذر تفعيل مسار الصوت المعالج للفيديو');return}
+ const mimeChoices=['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1.42E01E','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+ const mime=mimeChoices.find(t=>MediaRecorder.isTypeSupported(t));
+ if(!mime){status('المتصفح لا يوفّر صيغة فيديو مدعومة للتسجيل');return}
+ const canvas=document.createElement('canvas'),scale=Math.min(1,1920/video.videoWidth,1080/video.videoHeight);
+ canvas.width=Math.max(2,Math.floor(video.videoWidth*scale/2)*2);canvas.height=Math.max(2,Math.floor(video.videoHeight*scale/2)*2);
+ const c2d=canvas.getContext('2d');if(!c2d){status('تعذر إنشاء مسار الصورة');return}
+ const videoStream=canvas.captureStream(30),audioTracks=recordDestination.stream.getAudioTracks();
+ if(!audioTracks.length){videoStream.getTracks().forEach(t=>t.stop());status('مسار الصوت المعالج غير جاهز؛ اضغط تشغيل مع المعالجة ثم أعد المحاولة');return}
+ const stream=new MediaStream([...videoStream.getVideoTracks(),...audioTracks]);
+ let recorder=null,drawFrame=0,chunks=[],blob=null;
+ try{
+  status('جارٍ تسجيل الفيديو مع الصوت بعد المعالجة… لا تغلق الصفحة حتى يكتمل التصدير');
+  if(ctx.state==='suspended')await ctx.resume();
+  recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:Math.min(12000000,Math.max(2500000,canvas.width*canvas.height*4))});
+  const recorded=new Promise((resolve,reject)=>{
+   recorder.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
+   recorder.onerror=e=>reject(e.error||new Error('خطأ أثناء تسجيل الفيديو'));
+   recorder.onstop=()=>resolve(new Blob(chunks,{type:recorder.mimeType||mime}));
+  });
+  const draw=()=>{if(video.readyState>=2){try{c2d.drawImage(video,0,0,canvas.width,canvas.height)}catch(e){}}drawFrame=requestAnimationFrame(draw)};
+  if(video.ended||video.currentTime>=video.duration-.05)video.currentTime=0;
+  c2d.fillStyle='#000';c2d.fillRect(0,0,canvas.width,canvas.height);
+  recorder.start(1000);draw();
+  await video.play();
+  await new Promise((resolve,reject)=>{video.addEventListener('ended',resolve,{once:true});video.addEventListener('error',()=>reject(new Error('تعذر قراءة الفيديو أثناء التصدير')),{once:true})});
+  if(recorder.state!=='inactive')recorder.stop();
+  blob=await recorded;
+  if(!blob||blob.size<1024)throw new Error('الملف الناتج فارغ أو غير مكتمل');
+  const ext=mime.includes('mp4')?'mp4':'webm',item={id:uid(),name:active.name.replace(/\.[^.]+$/,'')+'-processed.'+ext,size:blob.size,type:blob.type||mime,blob,created:Date.now(),mediaKind:'video'};
+  await store('edited',item);downloadBlob(blob,item.name);status('اكتمل تصدير الفيديو مع الصوت المعالج وحُفظ في المحفوظات المعدّلة');await renderLibrary();
+ }catch(e){if(recorder&&recorder.state!=='inactive')try{recorder.stop()}catch(_){}status('فشل تصدير الفيديو: '+(e.message||e))}
+ finally{
+  cancelAnimationFrame(drawFrame);videoStream.getTracks().forEach(t=>t.stop());stream.getTracks().forEach(t=>t.stop());chunks=[];
+ }
 }
 async function backup(){const pack={version:2,original:[],edited:[]};for(const bucket of ['original','edited'])for(const x of await all(bucket)){pack[bucket].push({...x,blobData:Array.from(new Uint8Array(await x.blob.arrayBuffer()))})}const blob=new Blob([JSON.stringify(pack)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='soundcore-audio-lab-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);status('تم إنشاء النسخة الاحتياطية')}
 async function restore(file){try{const pack=JSON.parse(await file.text());for(const bucket of ['original','edited'])for(const x of pack[bucket]||[]){const {blobData,...rest}=x;await store(bucket,{...rest,blob:new Blob([new Uint8Array(blobData)],{type:x.type||'application/octet-stream'})})}status('تم استيراد النسخة الاحتياطية');renderLibrary()}catch(e){status('تعذر الاستيراد: '+e.message)}}
@@ -177,13 +273,14 @@ function bind(){
    if(ctx&&ctx.state==='suspended'){try{await ctx.resume()}catch(e){status('اضغط زر «تشغيل مع المعالجة» لتفعيل الصوت في Safari')}}
    if(ctx&&ctx.state==='running'&&connectedMediaElement!==el)ensureGraph(el);
    if(ctx&&ctx.state==='running')dynamicBassLoop();
+   if(active&&navigator.mediaSession){try{navigator.mediaSession.metadata=new MediaMetadata({title:active.name,artist:'Soundcore Audio Lab',album:'المعالجة الصوتية'});navigator.mediaSession.setActionHandler('play',()=>playNow());navigator.mediaSession.setActionHandler('pause',()=>getMediaElement().pause());navigator.mediaSession.setActionHandler('seekbackward',()=>{getMediaElement().currentTime=Math.max(0,getMediaElement().currentTime-10)});navigator.mediaSession.setActionHandler('seekforward',()=>{getMediaElement().currentTime=Math.min(getMediaElement().duration||Infinity,getMediaElement().currentTime+10)})}catch(e){}}
    setStatusState('يعمل الآن')
   });
   el.addEventListener('pause',()=>{cancelAnimationFrame(raf);setStatusState('متوقف مؤقتاً')});
   el.addEventListener('ended',()=>{cancelAnimationFrame(raf);setStatusState('انتهى التشغيل')});
   el.addEventListener('error',()=>status('تعذر تشغيل هذا الترميز في Safari. جرّب MP3 أو M4A أو MP4 أو MOV مدعوماً'));
  }
- $('playNow').onclick=playNow;$('pauseNow').onclick=()=>getMediaElement().pause();$('compareAB').onclick=toggleAB;$('saveOriginal').onclick=saveOriginal;$('export').onclick=exportWav;
+ $('playNow').onclick=playNow;$('pauseNow').onclick=()=>getMediaElement().pause();$('compareAB').onclick=toggleAB;$('saveOriginal').onclick=saveOriginal;$('export').onclick=exportWav;$('exportVideo').onclick=exportProcessedVideo;
  $('volume').oninput=e=>{settings.volume=Number(e.target.value);$('volOut').textContent=Math.round(settings.volume*100)+'%';applyAudio();persist()};
  bindRange('eqQ','q',v=>v.toFixed(1));bindRange('stereoWidth','width',v=>Math.round(v*100)+'%');bindRange('deesser','deesser',v=>v+' dB');bindRange('dynamicBass','dynamicBass',v=>v+' dB');bindRange('compressor','compressor',v=>v+':1');bindRange('masterGain','master',v=>Math.round(v*100)+'%');bindRange('bass','bass',v=>v+' dB');bindRange('limiter','limiter',v=>v+' dB');
  $('headphoneProfile').onchange=e=>applyProfile(e.target.value);
