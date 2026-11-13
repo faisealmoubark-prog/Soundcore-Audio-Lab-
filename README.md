@@ -9,6 +9,8 @@ Arabic RTL, mobile-first browser audio laboratory. This branch contains the expa
 - One-tap A/B comparison between the selected source audio and the live processed signal.
 - Starting DSP profiles for Soundcore A20i, R50i NC, P20i, Life 2 Neo and K20i. These are editable starting points, not official Soundcore calibration or firmware changes.
 - Offline WAV rendering with EQ, bass, de-essing, compression, limiting, gain and stereo width. Dynamic Bass is rendered as its configured low-frequency boost rather than a time-varying adaptive envelope.
+- Processed video export records the video frames with the processed Web Audio output, and a separate action extracts the processed audio track from video to WAV. Video export is real-time, browser-codec dependent, and capped at 1080p/30fps for mobile stability; long WAV extraction is limited to 10 minutes to reduce iPhone memory pressure.
+- Media Session metadata and lock-screen controls are configured where Safari supports them. A website cannot grant itself iOS Background Audio entitlement; guaranteed screen-locked playback requires a native iOS app with the Background Audio capability.
 - Separate local IndexedDB libraries for original and processed files, plus JSON backup export/import.
 - Local-only processing: selected audio is not uploaded to an application server.
 
