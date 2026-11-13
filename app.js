@@ -172,7 +172,13 @@ async function restore(file){try{const pack=JSON.parse(await file.text());for(co
 function bind(){
  $('pick').onclick=()=>$('files').click();$('files').onchange=async e=>{for(const f of e.target.files)await loadFile(f);e.target.value=''};
  for(const el of [$('player'),$('videoPlayer')]){
-  el.addEventListener('play',async()=>{if(audioSupported()){ensureGraph(el);if(ctx&&ctx.state==='suspended')try{await ctx.resume()}catch(e){}dynamicBassLoop()}setStatusState('يعمل الآن')});
+  el.addEventListener('play',async()=>{
+   // Do not create AudioContext from the media "play" event: iOS Safari may treat it as non-user-activated and mute the media element.
+   if(ctx&&ctx.state==='suspended'){try{await ctx.resume()}catch(e){status('اضغط زر «تشغيل مع المعالجة» لتفعيل الصوت في Safari')}}
+   if(ctx&&ctx.state==='running'&&connectedMediaElement!==el)ensureGraph(el);
+   if(ctx&&ctx.state==='running')dynamicBassLoop();
+   setStatusState('يعمل الآن')
+  });
   el.addEventListener('pause',()=>{cancelAnimationFrame(raf);setStatusState('متوقف مؤقتاً')});
   el.addEventListener('ended',()=>{cancelAnimationFrame(raf);setStatusState('انتهى التشغيل')});
   el.addEventListener('error',()=>status('تعذر تشغيل هذا الترميز في Safari. جرّب MP3 أو M4A أو MP4 أو MOV مدعوماً'));
@@ -189,5 +195,5 @@ function bind(){
  $('libraryBtn').onclick=()=>{document.querySelector('.tabs').scrollIntoView({behavior:'smooth'});renderLibrary()};
  const drop=$('drop');drop.ondragover=e=>{e.preventDefault();drop.style.borderColor='var(--a)'};drop.ondragleave=()=>drop.style.borderColor='';drop.ondrop=async e=>{e.preventDefault();drop.style.borderColor='';for(const file of Array.from(e.dataTransfer.files))await loadFile(file)};
 }
-(async()=>{loadSettings();db=await openDB();renderEQ();syncControls();bind();await renderLibrary();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});if(!audioSupported())status('المتصفح لا يدعم Web Audio API؛ التشغيل الأصلي متاح دون مؤثرات');})();
+(async()=>{loadSettings();renderEQ();syncControls();bind();try{db=await openDB();await renderLibrary();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});}catch(e){status('اختيار وتشغيل الملفات متاح، لكن المحفوظات المحلية غير متاحة في هذا التصفح: '+(e.message||e));}if(!audioSupported())status('المتصفح لا يدعم Web Audio API؛ التشغيل الأصلي متاح دون مؤثرات');})();
 })();
