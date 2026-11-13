@@ -16,8 +16,8 @@ const defaultSettings={q:1,width:1,deesser:0,dynamicBass:0,compressor:4,master:1
 let settings={...defaultSettings}, abSnapshot=null;
 function status(s){$('status').textContent=s}
 function getMediaElement(){return activeMediaElement||$('player')}
-function isVideoFile(file){return !!(file&&((file.type||'').startsWith('video/')||/\\.(mp4|mov|m4v|webm|avi)$/i.test(file.name||'')))}
-function setActiveMedia(video){const audio=getMediaElement(),v=$('videoPlayer');activeMediaElement=video?v:audio;audio.hidden=!!video;v.hidden=!video;}
+function isVideoFile(file){return !!(file&&((file.type||'').startsWith('video/')||/\.(mp4|mov|m4v|webm|avi)$/i.test(file.name||'')))}
+function setActiveMedia(video){const audio=$('player'),v=$('videoPlayer');activeMediaElement=video?v:audio;audio.hidden=!!video;v.hidden=!video;}
 function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,1);req.onupgradeneeded=()=>{const d=req.result;if(!d.objectStoreNames.contains('original'))d.createObjectStore('original',{keyPath:'id'});if(!d.objectStoreNames.contains('edited'))d.createObjectStore('edited',{keyPath:'id'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 function store(bucket,item){return new Promise((resolve,reject)=>{const tx=db.transaction(bucket,'readwrite');tx.objectStore(bucket).put(item);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
 function all(bucket){return new Promise((resolve,reject)=>{const tx=db.transaction(bucket);const q=tx.objectStore(bucket).getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)})}
@@ -91,9 +91,9 @@ function setStatusState(s){$('state').textContent=s}
 async function playNow(){if(!active&&!getMediaElement().src){status('اختر ملفاً صوتياً أولاً');return}try{if(audioSupported()){ensureGraph();if(ctx&&ctx.state==='suspended')await ctx.resume()}await getMediaElement().play();setStatusState('يعمل الآن');status('التشغيل مع إعدادات المعالجة الحالية');dynamicBassLoop()}catch(e){status('تعذر بدء التشغيل: '+e.message)}}
 async function loadFile(file){
  if(!file)return;
- const video=isVideoFile(file),isAudio=(file.type||'').startsWith('audio/')||/\\.(mp3|m4a|aac|wav|ogg|flac|aiff?)$/i.test(file.name);
+ const video=isVideoFile(file),isAudio=(file.type||'').startsWith('audio/')||/\.(mp3|m4a|aac|wav|ogg|flac|aiff?)$/i.test(file.name);
  if(!video&&!isAudio){status('نوع الملف غير مدعوم. اختر ملف صوت أو فيديو');return}
- const audio=getMediaElement(),v=$('videoPlayer');audio.pause();v.pause();setActiveMedia(video);const p=getMediaElement();
+ const audio=$('player'),v=$('videoPlayer');audio.pause();v.pause();setActiveMedia(video);const p=getMediaElement();
  if(p.src){try{URL.revokeObjectURL(p.src)}catch(e){}}
  active={id:uid(),name:file.name,size:file.size,type:file.type||(video?'video/mp4':'audio/unknown'),blob:file,created:Date.now(),mediaKind:video?'video':'audio'};originalBlob=file;
  $('track').textContent=file.name;$('meta').textContent=(file.size/1048576).toFixed(2)+' MB • '+(file.type||(video?'فيديو':'ملف صوتي'));
