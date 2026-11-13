@@ -152,6 +152,7 @@ function toggleAB(){
 function downloadBlob(blob,name){
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
 }
+async function seekVideoStart(video){if(video.currentTime>0.05)await new Promise((resolve,reject)=>{const done=()=>{video.removeEventListener('seeked',done);video.removeEventListener('error',fail);resolve()};const fail=()=>{video.removeEventListener('seeked',done);reject(new Error('تعذر إرجاع الفيديو إلى البداية'))};video.addEventListener('seeked',done,{once:true});video.addEventListener('error',fail,{once:true});video.currentTime=0})}
 async function exportVideoAudioWav(){
  const video=$('videoPlayer');
  if(!active||!video.src){status('اختر فيديو أولاً');return}
@@ -159,7 +160,8 @@ async function exportVideoAudioWav(){
  if(!ensureGraph(video)||!ctx){status('تعذر تفعيل معالج الصوت للفيديو');return}
  if(!ctx.createScriptProcessor){status('تسجيل WAV المباشر غير مدعوم في هذا المتصفح');return}
  if(!Number.isFinite(video.duration)||video.duration<=0){status('انتظر تحميل معلومات الفيديو ثم أعد التصدير');return}
- if(video.duration>1800){status('الفيديو أطول من 30 دقيقة؛ اختر مقطعاً أقصر لتجنب استهلاك ذاكرة الجهاز أثناء WAV');return}
+ if(video.duration>600){status('الفيديو أطول من 10 دقائق؛ اختر مقطعاً أقصر لتجنب استهلاك ذاكرة iPhone أثناء WAV');return}
+ if(recordingInProgress){status('هناك عملية تصدير جارية بالفعل');return}recordingInProgress=true;
  let processor=null,silent=null,chunks=[],channels=2,frames=0,finished=false;
  try{
   status('جارٍ تشغيل الفيديو والتقاط الصوت بعد المعالجة لتصديره WAV…');
@@ -171,7 +173,7 @@ async function exportVideoAudioWav(){
    frames+=input.length;
   };
   limiterNode.connect(processor);processor.connect(silent);silent.connect(ctx.destination);
-  if(video.ended||video.currentTime>=video.duration-.05)video.currentTime=0;
+  await seekVideoStart(video);
   await video.play();
   await new Promise((resolve,reject)=>{
    const ended=()=>resolve(),error=()=>reject(new Error('تعذر قراءة مسار الصوت في الفيديو'));
@@ -193,7 +195,7 @@ async function exportVideoAudioWav(){
   if(processor){processor.onaudioprocess=null;try{processor.disconnect()}catch(e){}}
   if(silent)try{silent.disconnect()}catch(e){}
   if(processor&&limiterNode)try{limiterNode.disconnect(processor)}catch(e){}
-  chunks=[];
+  chunks=[];recordingInProgress=false;
  }
 }
 async function exportWav(){
@@ -240,6 +242,7 @@ async function exportProcessedVideo(){
  if(!audioTracks.length){videoStream.getTracks().forEach(t=>t.stop());status('مسار الصوت المعالج غير جاهز؛ اضغط تشغيل مع المعالجة ثم أعد المحاولة');return}
  const stream=new MediaStream([...videoStream.getVideoTracks(),...audioTracks]);
  let recorder=null,drawFrame=0,chunks=[],blob=null;
+ if(recordingInProgress){videoStream.getTracks().forEach(t=>t.stop());status('هناك عملية تصدير جارية بالفعل');return}recordingInProgress=true;
  try{
   status('جارٍ تسجيل الفيديو مع الصوت بعد المعالجة… لا تغلق الصفحة حتى يكتمل التصدير');
   if(ctx.state==='suspended')await ctx.resume();
@@ -250,7 +253,7 @@ async function exportProcessedVideo(){
    recorder.onstop=()=>resolve(new Blob(chunks,{type:recorder.mimeType||mime}));
   });
   const draw=()=>{if(video.readyState>=2){try{c2d.drawImage(video,0,0,canvas.width,canvas.height)}catch(e){}}drawFrame=requestAnimationFrame(draw)};
-  if(video.ended||video.currentTime>=video.duration-.05)video.currentTime=0;
+  await seekVideoStart(video);
   c2d.fillStyle='#000';c2d.fillRect(0,0,canvas.width,canvas.height);
   recorder.start(1000);draw();
   await video.play();
