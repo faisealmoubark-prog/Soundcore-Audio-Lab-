@@ -53,7 +53,7 @@ function ensureGraph(){
   const splitter=ctx.createChannelSplitter(2),merger=ctx.createChannelMerger(2);splitter.channelCount=2;splitter.channelCountMode='explicit';splitter.channelInterpretation='speakers';
   const ll=ctx.createGain(),lr=ctx.createGain(),rl=ctx.createGain(),rr=ctx.createGain();
   mediaSource.connect(eqNodes[0]);eqNodes.forEach((n,i)=>n.connect(eqNodes[i+1]||bassShelf));
-  bassShelf.connect(bassDynamic);bassDynamic.connect(deesserNode);deesserNode.connect(compressorNode);compressorNode.connect(limiterNode);limiterNode.connect(masterNode);masterNode.connect(analyser);
+  bassShelf.connect(bassDynamic);bassDynamic.connect(deesserNode);deesserNode.connect(compressorNode);compressorNode.connect(limiterNode);masterNode.connect(limiterNode);limiterNode.connect(analyser);
   analyser.connect(splitter);
   splitter.connect(ll,0);splitter.connect(lr,0);splitter.connect(rl,1);splitter.connect(rr,1);
   ll.connect(merger,0,0);rl.connect(merger,0,0);lr.connect(merger,0,1);rr.connect(merger,0,1);
@@ -68,11 +68,11 @@ function ensureGraph(){
 function applyAudio(){
  if(!ctx)return;
  bands.forEach((b,i)=>{eqNodes[i].frequency.setTargetAtTime(b.freq,ctx.currentTime,.03);eqNodes[i].gain.setTargetAtTime(b.gain,ctx.currentTime,.03);eqNodes[i].Q.setTargetAtTime(settings.q,ctx.currentTime,.03)});
- bassShelf.gain.setTargetAtTime(settings.bass,ctx.currentTime,.03);
+ bassShelf.gain.setTargetAtTime(settings.bass+settings.dynamicBass,ctx.currentTime,.03);
  deesserNode.gain.setTargetAtTime(-settings.deesser,ctx.currentTime,.03);
  compressorNode.ratio.setTargetAtTime(settings.compressor,ctx.currentTime,.03);
  limiterNode.threshold.setTargetAtTime(settings.limiter,ctx.currentTime,.03);
- masterNode.gain.setTargetAtTime(settings.master,ctx.currentTime,.03);
+ masterNode.gain.setTargetAtTime(settings.master*settings.volume,ctx.currentTime,.03);
  const w=Math.max(0,Math.min(2,settings.width));widthNodes.ll.gain.setTargetAtTime((1+w)/2,ctx.currentTime,.03);widthNodes.rr.gain.setTargetAtTime((1+w)/2,ctx.currentTime,.03);widthNodes.lr.gain.setTargetAtTime((1-w)/2,ctx.currentTime,.03);widthNodes.rl.gain.setTargetAtTime((1-w)/2,ctx.currentTime,.03);
  const vol=$('volume');if(vol)vol.value=settings.volume;
 }
@@ -138,11 +138,11 @@ async function exportWav(){
   status('جارٍ تطبيق كل المؤثرات وتجهيز WAV…');const decodedCtx=new (window.AudioContext||window.webkitAudioContext)();const decoded=await decodedCtx.decodeAudioData((await active.blob.arrayBuffer()).slice(0));await decodedCtx.close();
   const off=new Offline(decoded.numberOfChannels,decoded.length,decoded.sampleRate),src=off.createBufferSource();src.buffer=decoded;
   const eq=bands.map(b=>{const n=off.createBiquadFilter();n.type='peaking';n.frequency.value=b.freq;n.Q.value=settings.q;n.gain.value=b.gain;return n});
-  const bass=off.createBiquadFilter();bass.type='lowshelf';bass.frequency.value=100;bass.gain.value=settings.bass;
+  const bass=off.createBiquadFilter();bass.type='lowshelf';bass.frequency.value=100;bass.gain.value=settings.bass+settings.dynamicBass;
   const de=off.createBiquadFilter();de.type='highshelf';de.frequency.value=6500;de.gain.value=-settings.deesser;
   const comp=off.createDynamicsCompressor();comp.ratio.value=settings.compressor;comp.threshold.value=-18;comp.knee.value=8;comp.attack.value=.006;comp.release.value=.18;
   const lim=off.createDynamicsCompressor();lim.threshold.value=settings.limiter;lim.knee.value=0;lim.ratio.value=20;lim.attack.value=.002;lim.release.value=.1;
-  const master=off.createGain();master.gain.value=settings.master;src.connect(eq[0]);eq.forEach((n,i)=>n.connect(eq[i+1]||bass));bass.connect(de);de.connect(comp);comp.connect(lim);lim.connect(master);master.connect(off.destination);src.start();
+  const master=off.createGain();master.gain.value=settings.master;src.connect(eq[0]);eq.forEach((n,i)=>n.connect(eq[i+1]||bass));bass.connect(de);de.connect(comp);comp.connect(master);master.connect(lim);const split=off.createChannelSplitter(2),merge=off.createChannelMerger(2);split.channelCount=2;split.channelCountMode='explicit';split.channelInterpretation='speakers';const w=Math.max(0,Math.min(2,settings.width));const ll=off.createGain(),lr=off.createGain(),rl=off.createGain(),rr=off.createGain();ll.gain.value=(1+w)/2;rr.gain.value=(1+w)/2;lr.gain.value=(1-w)/2;rl.gain.value=(1-w)/2;lim.connect(split);split.connect(ll,0);split.connect(lr,0);split.connect(rl,1);split.connect(rr,1);ll.connect(merge,0,0);rl.connect(merge,0,0);lr.connect(merge,0,1);rr.connect(merge,0,1);merge.connect(off.destination);src.start();
   const rendered=await off.startRendering();const blob=new Blob([encodeWav(rendered)],{type:'audio/wav'});const item={id:uid(),name:active.name.replace(/\.[^.]+$/,'')+'-processed.wav',size:blob.size,type:'audio/wav',blob,created:Date.now()};await store('edited',item);
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=item.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
   status('اكتمل تصدير WAV وحُفظت نسخة في المحفوظات المعدّلة');renderLibrary();
@@ -157,7 +157,7 @@ function bind(){
  $('player').addEventListener('ended',()=>{cancelAnimationFrame(raf);setStatusState('انتهى التشغيل')});
  $('player').addEventListener('error',()=>status('تعذر فك ترميز الملف في Safari؛ جرّب MP3 أو M4A أو WAV'));
  $('playNow').onclick=playNow;$('pauseNow').onclick=()=>$('player').pause();$('saveOriginal').onclick=saveOriginal;$('export').onclick=exportWav;
- $('volume').oninput=e=>{settings.volume=Number(e.target.value);$('volOut').textContent=Math.round(settings.volume*100)+'%';persist()};
+ $('volume').oninput=e=>{settings.volume=Number(e.target.value);$('volOut').textContent=Math.round(settings.volume*100)+'%';applyAudio();persist()};
  bindRange('eqQ','q',v=>v.toFixed(1));bindRange('stereoWidth','width',v=>Math.round(v*100)+'%');bindRange('deesser','deesser',v=>v+' dB');bindRange('dynamicBass','dynamicBass',v=>v+' dB');bindRange('compressor','compressor',v=>v+':1');bindRange('masterGain','master',v=>Math.round(v*100)+'%');bindRange('bass','bass',v=>v+' dB');bindRange('limiter','limiter',v=>v+' dB');
  $('headphoneProfile').onchange=e=>applyProfile(e.target.value);
  document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>preset(b.dataset.preset));
