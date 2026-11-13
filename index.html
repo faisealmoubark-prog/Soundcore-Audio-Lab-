@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#090d16"><meta name="apple-mobile-web-app-capable" content="yes"><title>Soundcore Audio Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#090d16;--panel:#111a29;--panel2:#172338;--line:#28364d;--muted:#9aabc2;--txt:#f4f7fb;--a:#49d6b0;--a2:#8c7bff}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 80% -10%,#173a48 0,transparent 40%),var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;min-height:100vh;padding:env(safe-area-inset-top) 14px calc(24px + env(safe-area-inset-bottom))}main{max-width:760px;margin:auto}.top{display:flex;align-items:center;justify-content:space-between;padding:22px 2px}.brand{display:flex;gap:12px;align-items:center}.logo{width:46px;height:46px;border-radius:15px;background:linear-gradient(145deg,#45d6b5,#5476ef);display:grid;place-items:center;color:#07131a;font-size:23px;font-weight:900}.muted{color:var(--muted);font-size:12px}.pill{border:1px solid var(--line);padding:7px 11px;border-radius:30px;color:var(--a);font-size:12px}.card{background:linear-gradient(145deg,#141f30,#101827);border:1px solid var(--line);border-radius:20px;padding:17px;margin:12px 0;box-shadow:0 12px 35px #0003}.section{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px}h1{font-size:19px;margin:0}h2{font-size:15px;margin:0}.sub{font-size:12px;color:var(--muted);margin-top:5px}.drop{border:1px dashed #52647d;border-radius:16px;padding:20px;text-align:center;background:#ffffff05}.btn{border:0;border-radius:12px;padding:12px 15px;background:linear-gradient(135deg,#45d6b5,#66a5ec);color:#07131a;font-weight:800;font-size:13px}.btn.secondary{background:#243249;color:#e8f1fb;border:1px solid #35445d}.btn.danger{background:#4a2530;color:#ffd9df}.actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px}input[type=file]{display:none}audio{width:100%;margin-top:12px;filter:invert(0)}.now{display:flex;align-items:center;gap:12px}.art{width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,#263b59,#173f42);display:grid;place-items:center;font-size:24px}.grow{flex:1;min-width:0}.name{font-size:14px;font-weight:700;overflow-wrap:anywhere}.rangeRow{display:grid;grid-template-columns:1fr 42px;gap:10px;align-items:center;margin:13px 0}.rangeRow label{font-size:12px;color:#dbe5f2}.rangeRow input{grid-column:1/2;width:100%;accent-color:var(--a)}.rangeRow output{grid-column:2;grid-row:1/3;text-align:left;color:var(--a);font-size:12px;font-variant-numeric:tabular-nums}.eq{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.band{background:#0c1421;border:1px solid #25334a;border-radius:12px;padding:9px 5px;text-align:center}.band label{font-size:11px;color:var(--muted)}.band input{height:105px;writing-mode:vertical-lr;direction:rtl;accent-color:var(--a);margin:9px auto;display:block}.band output{font-size:11px;color:var(--a)}.preset{display:flex;gap:7px;flex-wrap:wrap}.preset button{flex:1;min-width:105px}.tabs{display:flex;gap:7px;margin:12px 0}.tab{flex:1;padding:11px;border-radius:12px;border:1px solid var(--line);background:#121c2b;color:#dce8f7}.tab.active{border-color:var(--a);color:var(--a);background:#12332f}.library{display:grid;gap:8px}.file{display:flex;gap:10px;align-items:center;padding:11px;border:1px solid var(--line);border-radius:13px;background:#0d1522}.file .grow{flex:1}.file button{padding:8px 10px;font-size:11px}.note{font-size:11px;color:var(--muted);line-height:1.7}.status{font-size:12px;color:var(--a);min-height:20px;margin-top:8px}.hide{display:none!important}
+</style></head><body><main>
+<header class="top"><div class="brand"><div class="logo">♫</div><div><h1>Soundcore Audio Lab</h1><div class="muted">مختبر الصوت والتحكم • إصدار مستقل مُعاد بناؤه</div></div></div><span class="pill">iPhone Ready</span></header>
+<section class="card"><div class="section"><div><h2>مشغل الصوت</h2><div class="sub">تشغيل الملفات المحلية والتحكم الفعلي بالصوت</div></div><span class="pill" id="state">جاهز</span></div>
+<div class="drop" id="drop"><div style="font-size:27px">🎧</div><b>أضف ملفاتك الصوتية</b><div class="sub">MP3 • M4A • AAC • WAV • OGG • FLAC (حسب دعم المتصفح)</div><div class="actions"><button class="btn" id="pick">اختيار ملفات</button><button class="btn secondary" id="libraryBtn">المحفوظات</button></div><input id="files" type="file" accept="audio/*" multiple></div>
+<div class="now" style="margin-top:16px"><div class="art">♫</div><div class="grow"><div class="name" id="track">لم يتم اختيار ملف</div><div class="muted" id="meta">اختر ملفاً لبدء التشغيل</div></div></div><audio id="player" controls playsinline></audio>
+<div class="rangeRow"><label for="volume">مستوى الصوت العام</label><input id="volume" type="range" min="0" max="2" step=".01" value="1"><output id="volOut">100%</output></div>
+<div class="actions"><button class="btn secondary" id="saveOriginal">حفظ في المحفوظات الأصلية</button><button class="btn" id="export">تصدير الصوت بعد المعالجة WAV</button></div><div class="status" id="status"></div>
+</section>
+<section class="card"><div class="section"><div><h2>معالج الصوت EQ</h2><div class="sub">المعالجة أثناء التشغيل عبر Web Audio API</div></div><span class="pill">Live DSP</span></div>
+<div class="preset"><button class="btn secondary" data-preset="flat">Flat</button><button class="btn secondary" data-preset="bass">Bass Boost</button><button class="btn secondary" data-preset="vocal">وضوح الصوت</button><button class="btn secondary" data-preset="a20i">Soundcore A20i</button></div>
+<div class="eq" id="eq"></div>
+<div class="rangeRow"><label for="bass">Bass Boost إضافي</label><input id="bass" type="range" min="0" max="15" value="0" step="1"><output id="bassOut">0 dB</output></div>
+<div class="rangeRow"><label for="limiter">حماية من clipping</label><input id="limiter" type="range" min="-12" max="0" value="-1" step="1"><output id="limOut">-1 dB</output></div>
+<p class="note">تنبيه تقني: المعالجة الحية تعمل أثناء تشغيل الملف من داخل الصفحة. مستوى الصوت الفعلي النهائي يظل محدوداً بمستوى الجهاز وiOS وسماعة البلوتوث؛ لا يمكن للويب تجاوز حد النظام أو التحكم بصوت تطبيقات أخرى.</p></section>
+<section class="card"><div class="section"><div><h2>المحفوظات</h2><div class="sub">تخزين محلي على الجهاز دون رفع ملفاتك إلى خادم</div></div></div><div class="tabs"><button class="tab active" data-tab="original">المحفوظات الأصلية</button><button class="tab" data-tab="edited">المحفوظات المعدّلة</button></div><div id="library" class="library"><div class="note">لا توجد ملفات محفوظة بعد.</div></div><div class="actions"><button class="btn secondary" id="backup">تصدير نسخة احتياطية</button><button class="btn secondary" id="restore">استيراد نسخة احتياطية</button><input id="restoreFile" type="file" accept="application/json"></div><p class="note">التخزين المحلي قد يتأثر بمساحة Safari أو حذف بيانات المواقع. احتفظ بنسخة احتياطية للملفات المهمة.</p></section>
+<footer class="muted" style="text-align:center;padding:15px">Soundcore Audio Lab • يعمل محلياً داخل متصفحك</footer></main>
+<script>
+const $=id=>document.getElementById(id);let db,active=null,activeTab='original',ctx,source,filters=[],gain,limiter,originalBlob=null;
+const bands=[{f:60,t:'60 Hz'},{f:230,t:'230 Hz'},{f:910,t:'910 Hz'},{f:3600,t:'3.6 kHz'},{f:14000,t:'14 kHz'}],values=[0,0,0,0,0];
+function openDB(){return new Promise((res,rej)=>{let q=indexedDB.open('soundcore-audio-lab-v2',1);q.onupgradeneeded=()=>{let d=q.result;d.createObjectStore('original',{keyPath:'id'});d.createObjectStore('edited',{keyPath:'id'});};q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
+function store(bucket,item){return new Promise((res,rej)=>{let t=db.transaction(bucket,'readwrite');t.objectStore(bucket).put(item);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+function all(bucket){return new Promise((res,rej)=>{let t=db.transaction(bucket);let q=t.objectStore(bucket).getAll();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
+function del(bucket,id){return new Promise((res,rej)=>{let t=db.transaction(bucket,'readwrite');t.objectStore(bucket).delete(id);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random()}
+function setStatus(s){$('status').textContent=s}
+function renderEQ(){ $('eq').innerHTML='';bands.forEach((b,i)=>{let el=document.createElement('div');el.className='band';el.innerHTML='<label>'+b.t+'</label><input type="range" min="-12" max="12" step="1" value="'+values[i]+'" data-i="'+i+'"><output>'+values[i]+' dB</output>';el.querySelector('input').oninput=e=>{values[i]=+e.target.value;el.querySelector('output').textContent=values[i]+' dB';applyFilters()};$('eq').append(el)})}
+function setupAudio(){if(ctx)return;ctx=new (window.AudioContext||window.webkitAudioContext)();source=ctx.createMediaElementSource($('player'));filters=bands.map(b=>{let f=ctx.createBiquadFilter();f.type='peaking';f.frequency.value=b.f;f.Q.value=.8;return f});gain=ctx.createGain();limiter=ctx.createDynamicsCompressor();limiter.threshold.value=-1;limiter.knee.value=0;limiter.ratio.value=20;limiter.attack.value=.003;limiter.release.value=.12;source.connect(filters[0]);filters.forEach((f,i)=>f.connect(filters[i+1]||gain));gain.connect(limiter);limiter.connect(ctx.destination);applyFilters()}
+function applyFilters(){if(!ctx)return;filters.forEach((f,i)=>f.gain.setTargetAtTime(values[i],ctx.currentTime,.025));let bass=+$('bass').value;filters[0].gain.setTargetAtTime(values[0]+bass,ctx.currentTime,.025);gain.gain.setTargetAtTime(+$('volume').value,ctx.currentTime,.025);limiter.threshold.setTargetAtTime(+$('limiter').value,ctx.currentTime,.025)}
+async function loadFile(file){
+  active={id:uid(),name:file.name,size:file.size,type:file.type||'audio/unknown',blob:file,created:Date.now()};
+  originalBlob=file;$('track').textContent=file.name;$('meta').textContent=(file.size/1048576).toFixed(2)+' MB • '+(file.type||'ملف صوتي');
+  if($('player').src)URL.revokeObjectURL($('player').src);
+  $('player').src=URL.createObjectURL(file);delete $('player').dataset.itemId;delete $('player').dataset.bucket;
+  $('player').load();$('state').textContent='تم اختيار الملف';setStatus('الملف جاهز للتشغيل والمعالجة');
+}
+async function saveOriginal(){if(!active)return setStatus('اختر ملفاً أولاً');await store('original',{...active});setStatus('تم حفظ النسخة الأصلية كما هي دون تحويل');renderLibrary()}
+async function playLibraryItem(item){
+  try{
+    active=item;originalBlob=item.blob;
+    $('track').textContent=item.name;
+    $('meta').textContent=(item.size/1048576).toFixed(2)+' MB • '+(item.type||'ملف صوتي');
+    if($('player').dataset.itemId!==item.id || $('player').dataset.bucket!==activeTab){
+      if($('player').src) URL.revokeObjectURL($('player').src);
+      $('player').src=URL.createObjectURL(item.blob);
+      $('player').dataset.itemId=item.id;
+      $('player').dataset.bucket=activeTab;
+      $('player').load();
+    }
+    setupAudio();
+    if(ctx.state==='suspended') await ctx.resume();
+    await $('player').play();
+    $('state').textContent='يعمل الآن';
+    setStatus('يتم تشغيل: '+item.name);
+    renderLibrary();
+  }catch(e){setStatus('تعذر تشغيل الملف: '+(e.message||e));}
+}
+function stopLibraryPlayback(item){
+  const p=$('player');
+  if(p.dataset.itemId===item.id){p.pause();p.currentTime=0;$('state').textContent='متوقف';setStatus('تم إيقاف التشغيل');}
+  renderLibrary();
+}
+async function shareLibraryItem(item){
+  try{
+    const file=new File([item.blob],item.name,{type:item.type||'application/octet-stream'});
+    if(navigator.canShare && navigator.canShare({files:[file]}) && navigator.share){
+      await navigator.share({files:[file],title:item.name});
+      setStatus('تم فتح قائمة المشاركة في iPhone؛ اختر الإجراء المتاح لحفظ الملف.');
+    }else{
+      const url=URL.createObjectURL(item.blob),a=document.createElement('a');
+      a.href=url;a.download=item.name;document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),30000);
+      setStatus('بدأ تنزيل الملف؛ ستجده في تطبيق الملفات Downloads.');
+    }
+  }catch(e){if(e.name!=='AbortError')setStatus('تعذرت مشاركة الملف: '+(e.message||e));}
+}
+async function renderLibrary(){
+  let rows=await all(activeTab);$('library').innerHTML='';
+  if(!rows.length){$('library').innerHTML='<div class="note">لا توجد ملفات في هذا القسم.</div>';return}
+  rows.sort((a,b)=>b.created-a.created).forEach(item=>{
+    let el=document.createElement('div');el.className='file';
+    let info=document.createElement('div');info.className='grow';
+    info.innerHTML='<div class="name"></div><div class="muted"></div>';
+    info.querySelector('.name').textContent=item.name;
+    info.querySelector('.muted').textContent=(item.size/1048576).toFixed(2)+' MB';
+    let play=document.createElement('button');play.className='btn secondary';
+    const isThis=$('player').dataset.itemId===item.id && $('player').dataset.bucket===activeTab;
+    play.textContent=isThis && !$('player').paused?'إيقاف مؤقت':'تشغيل';
+    play.onclick=async()=>{if(isThis && !$('player').paused){$('player').pause();$('state').textContent='متوقف مؤقتاً';setStatus('تم إيقاف الصوت مؤقتاً');renderLibrary()}else await playLibraryItem(item)};
+    let stop=document.createElement('button');stop.className='btn secondary';stop.textContent='إيقاف';
+    stop.onclick=()=>stopLibraryPlayback(item);
+    let save=document.createElement('button');save.className='btn secondary';save.textContent='حفظ / مشاركة';
+    save.onclick=()=>shareLibraryItem(item);
+    let remove=document.createElement('button');remove.className='btn danger';remove.textContent='حذف';
+    remove.onclick=async()=>{if(!confirm('تأكيد حذف "'+item.name+'"؟'))return;if(isThis){$('player').pause();$('player').removeAttribute('src');$('player').load();delete $('player').dataset.itemId;delete $('player').dataset.bucket;active=null;$('track').textContent='لم يتم اختيار ملف';$('meta').textContent='اختر ملفاً لبدء التشغيل';}$('status').textContent='';await del(activeTab,item.id);setStatus('تم حذف الملف من المحفوظات');renderLibrary()};
+    el.append(info,play,stop,save,remove);$('library').append(el);
+  });
+}
+async function exportWav(){if(!active)return setStatus('اختر ملفاً أولاً');try{setStatus('جارٍ تجهيز الصوت وتطبيق EQ وBass Boost…');let AC=window.AudioContext||window.webkitAudioContext;let c=new AC();let ab=await active.blob.arrayBuffer();let decoded=await c.decodeAudioData(ab.slice(0));let off=new OfflineAudioContext(decoded.numberOfChannels,decoded.length,decoded.sampleRate);let src=off.createBufferSource();src.buffer=decoded;let chain=bands.map(b=>{let f=off.createBiquadFilter();f.type='peaking';f.frequency.value=b.f;f.Q.value=.8;return f});let g=off.createGain();let comp=off.createDynamicsCompressor();comp.threshold.value=+$('limiter').value;comp.knee.value=0;comp.ratio.value=20;comp.attack.value=.003;comp.release.value=.12;src.connect(chain[0]);chain.forEach((f,i)=>{f.gain.value=values[i]+(i===0?+$('bass').value:0);f.connect(chain[i+1]||g)});g.gain.value=1;g.connect(comp);comp.connect(off.destination);src.start();let out=await off.startRendering();let wav=toWav(out);let blob=new Blob([wav],{type:'audio/wav'});let item={id:uid(),name:active.name.replace(/\.[^.]+$/,'')+'-processed.wav',size:blob.size,type:'audio/wav',blob,created:Date.now()};await store('edited',item);let url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=item.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);setStatus('نجحت المعالجة وحُفظت نسخة WAV في المحفوظات المعدّلة');renderLibrary();await c.close()}catch(e){setStatus('تعذرت المعالجة: '+(e.message||e)+' — قد لا يدعم المتصفح ترميز هذا الملف')}}
+function toWav(buf){let ch=buf.numberOfChannels,len=buf.length*ch*2+44,b=new ArrayBuffer(len),v=new DataView(b),pos=0;function s(t){for(let i=0;i<t.length;i++)v.setUint8(pos++,t.charCodeAt(i))}s('RIFF');v.setUint32(pos, len-8,true);pos+=4;s('WAVE');s('fmt ');v.setUint32(pos,16,true);pos+=4;v.setUint16(pos,1,true);pos+=2;v.setUint16(pos,ch,true);pos+=2;v.setUint32(pos,buf.sampleRate,true);pos+=4;v.setUint32(pos,buf.sampleRate*ch*2,true);pos+=4;v.setUint16(pos,ch*2,true);pos+=2;v.setUint16(pos,16,true);pos+=2;s('data');v.setUint32(pos,len-pos-4,true);pos+=4;let data=Array.from({length:ch},(_,i)=>buf.getChannelData(i));for(let i=0;i<buf.length;i++)for(let c=0;c<ch;c++){let x=Math.max(-1,Math.min(1,data[c][i]));v.setInt16(pos,x<0?x*32768:x*32767,true);pos+=2}return b}
+$('pick').onclick=()=>$('files').click();$('files').onchange=async e=>{for(let f of e.target.files)await loadFile(f);e.target.value=''};$('player').onplay=async()=>{setupAudio();if(ctx.state==='suspended')await ctx.resume()};$('volume').oninput=e=>{$('volOut').textContent=Math.round(e.target.value*100)+'%';applyFilters()};$('bass').oninput=e=>{$('bassOut').textContent=e.target.value+' dB';applyFilters()};$('limiter').oninput=e=>{$('limOut').textContent=e.target.value+' dB';applyFilters()};$('saveOriginal').onclick=saveOriginal;$('export').onclick=exportWav;$('libraryBtn').onclick=()=>{document.querySelector('.tabs').scrollIntoView({behavior:'smooth'});renderLibrary()};
+document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{let p=b.dataset.preset,sets={flat:[0,0,0,0,0],bass:[6,4,0,0,1],vocal:[-2,1,3,4,2],a20i:[3,2,0,2,2]};values.splice(0,5,...sets[p]);$('bass').value=p==='bass'?6: p==='a20i'?3:0;$('bassOut').textContent=$('bass').value+' dB';renderEQ();applyFilters();setStatus('تم تطبيق إعداد '+b.textContent)});
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));activeTab=b.dataset.tab;renderLibrary()});
+$('backup').onclick=async()=>{let data={version:1,original:await all('original'),edited:await all('edited')};let json=JSON.stringify(data,(_,v)=>v instanceof Blob?null:v);let pack={version:1,original:[],edited:[]};for(let bucket of ['original','edited'])for(let x of data[bucket])pack[bucket].push({...x,blobData:await x.blob.arrayBuffer().then(a=>Array.from(new Uint8Array(a)))});let blob=new Blob([JSON.stringify(pack)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='soundcore-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),30000)};
+$('restore').onclick=()=>$('restoreFile').click();$('restoreFile').onchange=async e=>{try{let p=JSON.parse(await e.target.files[0].text());for(let bucket of ['original','edited'])for(let x of p[bucket]||[]){let {blobData,...rest}=x;await store(bucket,{...rest,blob:new Blob([new Uint8Array(blobData)],{type:x.type})})}setStatus('تم استيراد النسخة الاحتياطية');renderLibrary()}catch(err){setStatus('تعذر استيراد النسخة: '+err.message)}};
+$('drop').ondragover=e=>{e.preventDefault();$('drop').style.borderColor='var(--a)'};$('drop').ondrop=async e=>{e.preventDefault();let f=[...e.dataTransfer.files].filter(x=>x.type.startsWith('audio/'));for(let x of f)await loadFile(x)};
+(async()=>{db=await openDB();renderEQ();renderLibrary()})().catch(e=>setStatus('خطأ في التخزين المحلي: '+e.message));
+</script></body></html>
