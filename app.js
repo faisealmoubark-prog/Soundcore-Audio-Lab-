@@ -48,11 +48,11 @@ function ensureGraph(element=getMediaElement()){
    bassShelf=ctx.createBiquadFilter();bassShelf.type='lowshelf';bassShelf.frequency.value=100;
    bassDynamicFilter=ctx.createBiquadFilter();bassDynamicFilter.type='lowpass';bassDynamicFilter.frequency.value=160;bassDynamicFilter.Q.value=.7;bassDynamic=ctx.createGain();
    deesserNode=ctx.createBiquadFilter();deesserNode.type='highshelf';deesserNode.frequency.value=6500;
-   compressorNode=ctx.createDynamicsCompressor();compressorNode.knee.value=8;compressorNode.attack.value=.006;compressorNode.release.value=.18;
+   compressorNode=ctx.createDynamicsCompressor();compressorNode.threshold.value=-18;compressorNode.knee.value=8;compressorNode.attack.value=.006;compressorNode.release.value=.18;
    limiterNode=ctx.createDynamicsCompressor();limiterNode.threshold.value=settings.limiter;limiterNode.knee.value=0;limiterNode.ratio.value=20;limiterNode.attack.value=.002;limiterNode.release.value=.1;
    masterNode=ctx.createGain();analyser=ctx.createAnalyser();analyser.fftSize=1024;mediaSources=new WeakMap();
    eqNodes.forEach((n,i)=>n.connect(eqNodes[i+1]||bassShelf));
-   bassShelf.connect(bassDynamicFilter);bassDynamicFilter.connect(bassDynamic);bassDynamic.connect(deesserNode);
+   bassShelf.connect(deesserNode);eqNodes[eqNodes.length-1].connect(bassDynamicFilter);bassDynamicFilter.connect(bassDynamic);bassDynamic.connect(deesserNode);
    deesserNode.connect(compressorNode);compressorNode.connect(masterNode);masterNode.connect(limiterNode);limiterNode.connect(analyser);
    analyser.connect(ctx.destination);recordDestination=ctx.createMediaStreamDestination();limiterNode.connect(recordDestination);
   }
@@ -210,7 +210,7 @@ async function exportWav(){
   const comp=off.createDynamicsCompressor();comp.ratio.value=settings.compressor;comp.threshold.value=-18;comp.knee.value=8;comp.attack.value=.006;comp.release.value=.18;
   const lim=off.createDynamicsCompressor();lim.threshold.value=settings.limiter;lim.knee.value=0;lim.ratio.value=20;lim.attack.value=.002;lim.release.value=.1;
   const master=off.createGain();master.gain.value=settings.master*settings.volume;
-  src.connect(eq[0]);eq.forEach((n,i)=>n.connect(eq[i+1]||bass));bass.connect(dynamicFilter);dynamicFilter.connect(dynamicGain);dynamicGain.connect(de);de.connect(comp);comp.connect(master);master.connect(lim);
+  src.connect(eq[0]);eq.forEach((n,i)=>n.connect(eq[i+1]||bass));bass.connect(de);eq[eq.length-1].connect(dynamicFilter);dynamicFilter.connect(dynamicGain);dynamicGain.connect(de);de.connect(comp);comp.connect(master);master.connect(lim);
   const split=off.createChannelSplitter(2),merge=off.createChannelMerger(2),upmix=off.createGain();upmix.channelCount=2;upmix.channelCountMode='explicit';upmix.channelInterpretation='speakers';upmix.connect(split);lim.connect(upmix);
   const w=Math.max(0,Math.min(2,settings.width)),ll=off.createGain(),lr=off.createGain(),rl=off.createGain(),rr=off.createGain();
   ll.gain.value=(1+w)/2;rr.gain.value=(1+w)/2;lr.gain.value=(1-w)/2;rl.gain.value=(1-w)/2;
