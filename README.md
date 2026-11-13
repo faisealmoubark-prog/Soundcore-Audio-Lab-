@@ -5,9 +5,10 @@ Arabic RTL, mobile-first browser audio laboratory. This branch contains the expa
 ## Audio features
 - Local audio selection and playback in the browser (codec support depends on Safari/browser).
 - Eight-band parametric EQ with editable center frequency, gain and global Q.
-- Live DSP using the Web Audio API: low-shelf bass enhancement, dynamic bass control, compressor, clipping limiter, de-esser, master gain and stereo-width matrix.
+- Live DSP using the Web Audio API: low-shelf bass enhancement, adaptive low-frequency dynamic bass, compressor, clipping limiters, high-frequency de-essing, master gain and stereo-width matrix.
+- One-tap A/B comparison between the selected source audio and the live processed signal.
 - Starting DSP profiles for Soundcore A20i, R50i NC, P20i, Life 2 Neo and K20i. These are editable starting points, not official Soundcore calibration or firmware changes.
-- Offline WAV rendering with the EQ and supported DSP chain.
+- Offline WAV rendering with EQ, bass, de-essing, compression, limiting, gain and stereo width. Dynamic Bass is rendered as its configured low-frequency boost rather than a time-varying adaptive envelope.
 - Separate local IndexedDB libraries for original and processed files, plus JSON backup export/import.
 - Local-only processing: selected audio is not uploaded to an application server.
 
