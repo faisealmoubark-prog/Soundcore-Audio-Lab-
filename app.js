@@ -13,7 +13,7 @@ const profileData={
  k20i:{label:'Soundcore K20i',g:[2,1,0,0,1,2,2,1],bass:2,threshold:-2,width:1}
 };
 const defaultSettings={q:1,width:1,deesser:0,dynamicBass:0,compressor:4,master:1,bass:0,limiter:-1,volume:1,profile:'custom'};
-let settings={...defaultSettings};
+let settings={...defaultSettings}, abSnapshot=null;
 function status(s){$('status').textContent=s}
 function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,1);req.onupgradeneeded=()=>{const d=req.result;if(!d.objectStoreNames.contains('original'))d.createObjectStore('original',{keyPath:'id'});if(!d.objectStoreNames.contains('edited'))d.createObjectStore('edited',{keyPath:'id'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 function store(bucket,item){return new Promise((resolve,reject)=>{const tx=db.transaction(bucket,'readwrite');tx.objectStore(bucket).put(item);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
@@ -130,7 +130,14 @@ function encodeWav(buffer){
  str('RIFF');v.setUint32(p,len-8,true);p+=4;str('WAVE');str('fmt ');v.setUint32(p,16,true);p+=4;v.setUint16(p,1,true);p+=2;v.setUint16(p,ch,true);p+=2;v.setUint32(p,buffer.sampleRate,true);p+=4;v.setUint32(p,buffer.sampleRate*ch*2,true);p+=4;v.setUint16(p,ch*2,true);p+=2;v.setUint16(p,16,true);p+=2;str('data');v.setUint32(p,len-p-4,true);p+=4;
  const channels=Array.from({length:ch},(_,i)=>buffer.getChannelData(i));for(let i=0;i<buffer.length;i++)for(let c=0;c<ch;c++){const x=Math.max(-1,Math.min(1,channels[c][i]));v.setInt16(p,x<0?x*32768:x*32767,true);p+=2}return ab;
 }
+function toggleAB(){
+ if(!active){status('اختر ملفاً صوتياً أولاً');return}
+ if(!ensureGraph()){status('المقارنة تحتاج Web Audio API');return}
+ if(!abSnapshot){abSnapshot={settings:{...settings},bands:bands.map(b=>({...b}))};bands.forEach(b=>b.gain=0);settings.bass=0;settings.dynamicBass=0;settings.deesser=0;settings.compressor=1;settings.master=1;settings.limiter=0;settings.width=1;renderEQ();syncControls();applyAudio();$('compareAB').textContent='العودة إلى المعالجة';status('وضع A/B: تسمع الأصل دون EQ والمؤثرات');}
+ else{settings={...abSnapshot.settings};abSnapshot.bands.forEach((b,i)=>Object.assign(bands[i],b));abSnapshot=null;renderEQ();syncControls();applyAudio();$('compareAB').textContent='مقارنة الأصل / المعالجة A/B';status('تمت العودة إلى إعدادات المعالجة');}
+}
 async function exportWav(){
+ if(abSnapshot){settings={...abSnapshot.settings};abSnapshot.bands.forEach((b,i)=>Object.assign(bands[i],b));abSnapshot=null;renderEQ();syncControls();$('compareAB').textContent='مقارنة الأصل / المعالجة A/B';applyAudio()}
  if(!active){status('اختر ملفاً أولاً');return}
  const Offline=window.OfflineAudioContext||window.webkitOfflineAudioContext;if(!Offline){status('هذا المتصفح لا يدعم التصدير الصوتي غير المتصل');return}
  let ac;
@@ -156,7 +163,7 @@ function bind(){
  $('player').addEventListener('pause',()=>{cancelAnimationFrame(raf);setStatusState('متوقف مؤقتاً')});
  $('player').addEventListener('ended',()=>{cancelAnimationFrame(raf);setStatusState('انتهى التشغيل')});
  $('player').addEventListener('error',()=>status('تعذر فك ترميز الملف في Safari؛ جرّب MP3 أو M4A أو WAV'));
- $('playNow').onclick=playNow;$('pauseNow').onclick=()=>$('player').pause();$('saveOriginal').onclick=saveOriginal;$('export').onclick=exportWav;
+ $('playNow').onclick=playNow;$('pauseNow').onclick=()=>$('player').pause();$('compareAB').onclick=toggleAB;$('saveOriginal').onclick=saveOriginal;$('export').onclick=exportWav;
  $('volume').oninput=e=>{settings.volume=Number(e.target.value);$('volOut').textContent=Math.round(settings.volume*100)+'%';applyAudio();persist()};
  bindRange('eqQ','q',v=>v.toFixed(1));bindRange('stereoWidth','width',v=>Math.round(v*100)+'%');bindRange('deesser','deesser',v=>v+' dB');bindRange('dynamicBass','dynamicBass',v=>v+' dB');bindRange('compressor','compressor',v=>v+':1');bindRange('masterGain','master',v=>Math.round(v*100)+'%');bindRange('bass','bass',v=>v+' dB');bindRange('limiter','limiter',v=>v+' dB');
  $('headphoneProfile').onchange=e=>applyProfile(e.target.value);
