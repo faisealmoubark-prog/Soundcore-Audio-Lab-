@@ -50,7 +50,7 @@ function ensureGraph(){
   limiterNode=ctx.createDynamicsCompressor();limiterNode.threshold.value=settings.limiter;limiterNode.knee.value=0;limiterNode.ratio.value=20;limiterNode.attack.value=.002;limiterNode.release.value=.1;
   masterNode=ctx.createGain();
   analyser=ctx.createAnalyser();analyser.fftSize=1024;
-  const splitter=ctx.createChannelSplitter(2),merger=ctx.createChannelMerger(2);
+  const splitter=ctx.createChannelSplitter(2),merger=ctx.createChannelMerger(2);splitter.channelCount=2;splitter.channelCountMode='explicit';splitter.channelInterpretation='speakers';
   const ll=ctx.createGain(),lr=ctx.createGain(),rl=ctx.createGain(),rr=ctx.createGain();
   mediaSource.connect(eqNodes[0]);eqNodes.forEach((n,i)=>n.connect(eqNodes[i+1]||bassShelf));
   bassShelf.connect(bassDynamic);bassDynamic.connect(deesserNode);deesserNode.connect(compressorNode);compressorNode.connect(limiterNode);limiterNode.connect(masterNode);masterNode.connect(analyser);
@@ -87,7 +87,7 @@ async function playNow(){if(!active&&!$('player').src){status('اختر ملفا
 async function loadFile(file){
  if(!file||(!file.type.startsWith('audio/')&&!/\.(mp3|m4a|aac|wav|ogg|flac|aiff?)$/i.test(file.name))){status('الملف المحدد ليس ملفاً صوتياً مدعوماً');return}
  active={id:uid(),name:file.name,size:file.size,type:file.type||'audio/unknown',blob:file,created:Date.now()};originalBlob=file;
- $('track').textContent=file.name;$('meta').textContent+(file.size/1048576).toFixed(2)+' MB • '+(file.type||'ملف صوتي');
+ $('track').textContent=file.name;$('meta').textContent=(file.size/1048576).toFixed(2)+' MB • '+(file.type||'ملف صوتي');
  const p=$('player');if(p.src)URL.revokeObjectURL(p.src);p.removeAttribute('data-item-id');p.removeAttribute('data-bucket');p.src=URL.createObjectURL(file);p.load();setStatusState('تم اختيار الملف');status('الملف جاهز — اضغط تشغيل مع المعالجة'); 
 }
 async function saveOriginal(){if(!active){status('اختر ملفاً أولاً');return}await store('original',{...active});status('حُفظت النسخة الأصلية دون أي تعديل');renderLibrary()}
