@@ -2,7 +2,7 @@
 (() => {
 const $ = id => document.getElementById(id);
 const DB_NAME='soundcore-audio-lab-v2';
-let db=null, active=null, activeTab='original', ctx=null, mediaSource=null, eqNodes=[], bassShelf=null, bassDynamic=null, bassDynamicFilter=null, deesserNode=null, compressorNode=null, limiterNode=null, masterNode=null, widthNodes=null, analyser=null, outputLimiter=null, raf=0, originalBlob=null;
+let db=null, active=null, activeTab='original', ctx=null, mediaSource=null, connectedMediaElement=null, mediaSources=new WeakMap(), activeMediaElement=null, eqNodes=[], bassShelf=null, bassDynamic=null, bassDynamicFilter=null, deesserNode=null, compressorNode=null, limiterNode=null, masterNode=null, widthNodes=null, analyser=null, outputLimiter=null, raf=0, originalBlob=null;
 const bandDefaults=[60,120,250,500,1000,2000,4000,8000];
 const bands=bandDefaults.map((freq,i)=>({freq,gain:0,q:1}));
 const profileData={
@@ -15,6 +15,9 @@ const profileData={
 const defaultSettings={q:1,width:1,deesser:0,dynamicBass:0,compressor:4,master:1,bass:0,limiter:-1,volume:1,profile:'custom'};
 let settings={...defaultSettings}, abSnapshot=null;
 function status(s){$('status').textContent=s}
+function getMediaElement(){return activeMediaElement||$('player')}
+function isVideoFile(file){return !!(file&&((file.type||'').startsWith('video/')||/\\.(mp4|mov|m4v|webm|avi)$/i.test(file.name||'')))}
+function setActiveMedia(video){const audio=getMediaElement(),v=$('videoPlayer');activeMediaElement=video?v:audio;audio.hidden=!!video;v.hidden=!video;}
 function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,1);req.onupgradeneeded=()=>{const d=req.result;if(!d.objectStoreNames.contains('original'))d.createObjectStore('original',{keyPath:'id'});if(!d.objectStoreNames.contains('edited'))d.createObjectStore('edited',{keyPath:'id'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 function store(bucket,item){return new Promise((resolve,reject)=>{const tx=db.transaction(bucket,'readwrite');tx.objectStore(bucket).put(item);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
 function all(bucket){return new Promise((resolve,reject)=>{const tx=db.transaction(bucket);const q=tx.objectStore(bucket).getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)})}
@@ -36,59 +39,67 @@ function renderEQ(){
  });
 }
 function audioSupported(){return !!(window.AudioContext||window.webkitAudioContext)}
-function ensureGraph(){
- if(ctx)return true;
+function ensureGraph(element=getMediaElement()){
  if(!audioSupported())return false;
  try{
-  const AC=window.AudioContext||window.webkitAudioContext;ctx=new AC();
-  mediaSource=ctx.createMediaElementSource($('player'));
-  eqNodes=bands.map(b=>{const n=ctx.createBiquadFilter();n.type='peaking';n.frequency.value=b.freq;n.Q.value=settings.q;return n});
-  bassShelf=ctx.createBiquadFilter();bassShelf.type='lowshelf';bassShelf.frequency.value=100;
-  bassDynamicFilter=ctx.createBiquadFilter();bassDynamicFilter.type='lowpass';bassDynamicFilter.frequency.value=160;bassDynamicFilter.Q.value=.7;bassDynamic=ctx.createGain();
-  deesserNode=ctx.createBiquadFilter();deesserNode.type='highshelf';deesserNode.frequency.value=6500;
-  compressorNode=ctx.createDynamicsCompressor();compressorNode.knee.value=8;compressorNode.attack.value=.006;compressorNode.release.value=.18;
-  limiterNode=ctx.createDynamicsCompressor();limiterNode.threshold.value=settings.limiter;limiterNode.knee.value=0;limiterNode.ratio.value=20;limiterNode.attack.value=.002;limiterNode.release.value=.1;
-  masterNode=ctx.createGain();
-  analyser=ctx.createAnalyser();analyser.fftSize=1024;
-  const splitter=ctx.createChannelSplitter(2),merger=ctx.createChannelMerger(2);splitter.channelCount=2;splitter.channelCountMode='explicit';splitter.channelInterpretation='speakers';
-  const ll=ctx.createGain(),lr=ctx.createGain(),rl=ctx.createGain(),rr=ctx.createGain();
-  mediaSource.connect(eqNodes[0]);eqNodes.forEach((n,i)=>n.connect(eqNodes[i+1]||bassShelf));
-  bassShelf.connect(deesserNode);eqNodes[eqNodes.length-1].connect(bassDynamicFilter);bassDynamicFilter.connect(bassDynamic);bassDynamic.connect(deesserNode);deesserNode.connect(compressorNode);compressorNode.connect(masterNode);masterNode.connect(limiterNode);limiterNode.connect(analyser);
-  const upmix=ctx.createGain();upmix.channelCount=2;upmix.channelCountMode='explicit';upmix.channelInterpretation='speakers';analyser.connect(upmix);upmix.connect(splitter);
-  splitter.connect(ll,0);splitter.connect(lr,0);splitter.connect(rl,1);splitter.connect(rr,1);
-  ll.connect(merger,0,0);rl.connect(merger,0,0);lr.connect(merger,0,1);rr.connect(merger,0,1);
-  widthNodes={ll,lr,rl,rr};
-  outputLimiter=ctx.createDynamicsCompressor();outputLimiter.threshold.value=-1;outputLimiter.knee.value=0;outputLimiter.ratio.value=20;outputLimiter.attack.value=.001;outputLimiter.release.value=.08;merger.connect(outputLimiter);outputLimiter.connect(ctx.destination);
+  if(!ctx){
+   const AC=window.AudioContext||window.webkitAudioContext;ctx=new AC();
+   eqNodes=bands.map(b=>{const n=ctx.createBiquadFilter();n.type='peaking';n.frequency.value=b.freq;n.Q.value=settings.q;return n});
+   bassShelf=ctx.createBiquadFilter();bassShelf.type='lowshelf';bassShelf.frequency.value=100;
+   bassDynamicFilter=ctx.createBiquadFilter();bassDynamicFilter.type='lowpass';bassDynamicFilter.frequency.value=160;bassDynamicFilter.Q.value=.7;bassDynamic=ctx.createGain();
+   deesserNode=ctx.createBiquadFilter();deesserNode.type='highshelf';deesserNode.frequency.value=6500;
+   compressorNode=ctx.createDynamicsCompressor();compressorNode.knee.value=8;compressorNode.attack.value=.006;compressorNode.release.value=.18;
+   limiterNode=ctx.createDynamicsCompressor();limiterNode.threshold.value=settings.limiter;limiterNode.knee.value=0;limiterNode.ratio.value=20;limiterNode.attack.value=.002;limiterNode.release.value=.1;
+   masterNode=ctx.createGain();analyser=ctx.createAnalyser();analyser.fftSize=1024;mediaSources=new WeakMap();
+   eqNodes.forEach((n,i)=>n.connect(eqNodes[i+1]||bassShelf));
+   bassShelf.connect(deesserNode);eqNodes[eqNodes.length-1].connect(bassDynamicFilter);bassDynamicFilter.connect(bassDynamic);bassDynamic.connect(deesserNode);
+   deesserNode.connect(compressorNode);compressorNode.connect(masterNode);masterNode.connect(limiterNode);limiterNode.connect(analyser);
+   analyser.connect(ctx.destination);
+  }
+  if(connectedMediaElement!==element){
+   if(mediaSource){try{mediaSource.disconnect()}catch(e){}}
+   mediaSource=mediaSources.get(element);
+   if(!mediaSource){mediaSource=ctx.createMediaElementSource(element);mediaSources.set(element,mediaSource)}
+   mediaSource.connect(eqNodes[0]);connectedMediaElement=element;
+  }
   applyAudio();return true;
  }catch(e){
-  try{if(mediaSource&&ctx)mediaSource.connect(ctx.destination)}catch(_){}
-  status('تعذر تفعيل المعالجة الحية؛ سيبقى التشغيل الأصلي متاحاً: '+e.message);return false;
+  try{
+   if(!ctx){const AC=window.AudioContext||window.webkitAudioContext;ctx=new AC()}
+   if(!mediaSource){mediaSource=mediaSources.get(element)||ctx.createMediaElementSource(element);mediaSources.set(element,mediaSource)}
+   try{mediaSource.disconnect()}catch(_){}
+   mediaSource.connect(ctx.destination);connectedMediaElement=element;
+  }catch(f){}
+  status('تعذر تفعيل بعض المؤثرات؛ حاول التشغيل الأصلي. '+(e.message||e));return false;
  }
 }
 function applyAudio(){
- if(!ctx)return;
+ if(!ctx||!eqNodes.length)return;
  bands.forEach((b,i)=>{eqNodes[i].frequency.setTargetAtTime(b.freq,ctx.currentTime,.03);eqNodes[i].gain.setTargetAtTime(b.gain,ctx.currentTime,.03);eqNodes[i].Q.setTargetAtTime(settings.q,ctx.currentTime,.03)});
  bassShelf.gain.setTargetAtTime(settings.bass,ctx.currentTime,.03);bassDynamic.gain.setTargetAtTime(1+settings.dynamicBass/12,ctx.currentTime,.03);
- deesserNode.gain.setTargetAtTime(-settings.deesser,ctx.currentTime,.03);
- compressorNode.ratio.setTargetAtTime(settings.compressor,ctx.currentTime,.03);
- limiterNode.threshold.setTargetAtTime(settings.limiter,ctx.currentTime,.03);
- masterNode.gain.setTargetAtTime(settings.master*settings.volume,ctx.currentTime,.03);
- const w=Math.max(0,Math.min(2,settings.width));widthNodes.ll.gain.setTargetAtTime((1+w)/2,ctx.currentTime,.03);widthNodes.rr.gain.setTargetAtTime((1+w)/2,ctx.currentTime,.03);widthNodes.lr.gain.setTargetAtTime((1-w)/2,ctx.currentTime,.03);widthNodes.rl.gain.setTargetAtTime((1-w)/2,ctx.currentTime,.03);
+ deesserNode.gain.setTargetAtTime(-settings.deesser,ctx.currentTime,.03);compressorNode.ratio.setTargetAtTime(settings.compressor,ctx.currentTime,.03);
+ limiterNode.threshold.setTargetAtTime(settings.limiter,ctx.currentTime,.03);masterNode.gain.setTargetAtTime(settings.master*settings.volume,ctx.currentTime,.03);
  const vol=$('volume');if(vol)vol.value=settings.volume;
 }
 function dynamicBassLoop(){
- cancelAnimationFrame(raf);if(!analyser||!settings.dynamicBass||$('player').paused)return;
+ cancelAnimationFrame(raf);const p=getMediaElement();if(!analyser||!settings.dynamicBass||p.paused)return;
  const data=new Uint8Array(analyser.fftSize);
- const tick=()=>{if(!analyser||$('player').paused){cancelAnimationFrame(raf);return}analyser.getByteTimeDomainData(data);let sum=0;for(let i=0;i<data.length;i++){const x=(data[i]-128)/128;sum+=x*x}const rms=Math.sqrt(sum/data.length);const reduction=Math.min(settings.dynamicBass,rms*settings.dynamicBass*2.4);bassDynamic.gain.setTargetAtTime(1+Math.max(0,settings.dynamicBass-reduction)/12,ctx.currentTime,.08);raf=requestAnimationFrame(tick)};
+ const tick=()=>{if(!analyser||getMediaElement().paused){cancelAnimationFrame(raf);return}analyser.getByteTimeDomainData(data);let sum=0;for(let i=0;i<data.length;i++){const x=(data[i]-128)/128;sum+=x*x}const rms=Math.sqrt(sum/data.length);const reduction=Math.min(settings.dynamicBass,rms*settings.dynamicBass*2.4);bassDynamic.gain.setTargetAtTime(1+Math.max(0,settings.dynamicBass-reduction)/12,ctx.currentTime,.08);raf=requestAnimationFrame(tick)};
  raf=requestAnimationFrame(tick);
 }
 function setStatusState(s){$('state').textContent=s}
-async function playNow(){if(!active&&!$('player').src){status('اختر ملفاً صوتياً أولاً');return}try{if(audioSupported()){ensureGraph();if(ctx&&ctx.state==='suspended')await ctx.resume()}await $('player').play();setStatusState('يعمل الآن');status('التشغيل مع إعدادات المعالجة الحالية');dynamicBassLoop()}catch(e){status('تعذر بدء التشغيل: '+e.message)}}
+async function playNow(){if(!active&&!getMediaElement().src){status('اختر ملفاً صوتياً أولاً');return}try{if(audioSupported()){ensureGraph();if(ctx&&ctx.state==='suspended')await ctx.resume()}await getMediaElement().play();setStatusState('يعمل الآن');status('التشغيل مع إعدادات المعالجة الحالية');dynamicBassLoop()}catch(e){status('تعذر بدء التشغيل: '+e.message)}}
 async function loadFile(file){
- if(!file||(!file.type.startsWith('audio/')&&!/\.(mp3|m4a|aac|wav|ogg|flac|aiff?)$/i.test(file.name))){status('الملف المحدد ليس ملفاً صوتياً مدعوماً');return}
- active={id:uid(),name:file.name,size:file.size,type:file.type||'audio/unknown',blob:file,created:Date.now()};originalBlob=file;
- $('track').textContent=file.name;$('meta').textContent=(file.size/1048576).toFixed(2)+' MB • '+(file.type||'ملف صوتي');
- const p=$('player');if(p.src)URL.revokeObjectURL(p.src);p.removeAttribute('data-item-id');p.removeAttribute('data-bucket');p.src=URL.createObjectURL(file);p.load();setStatusState('تم اختيار الملف');status('الملف جاهز — اضغط تشغيل مع المعالجة'); 
+ if(!file)return;
+ const video=isVideoFile(file),isAudio=(file.type||'').startsWith('audio/')||/\\.(mp3|m4a|aac|wav|ogg|flac|aiff?)$/i.test(file.name);
+ if(!video&&!isAudio){status('نوع الملف غير مدعوم. اختر ملف صوت أو فيديو');return}
+ const audio=getMediaElement(),v=$('videoPlayer');audio.pause();v.pause();setActiveMedia(video);const p=getMediaElement();
+ if(p.src){try{URL.revokeObjectURL(p.src)}catch(e){}}
+ active={id:uid(),name:file.name,size:file.size,type:file.type||(video?'video/mp4':'audio/unknown'),blob:file,created:Date.now(),mediaKind:video?'video':'audio'};originalBlob=file;
+ $('track').textContent=file.name;$('meta').textContent=(file.size/1048576).toFixed(2)+' MB • '+(file.type||(video?'فيديو':'ملف صوتي'));
+ p.removeAttribute('data-item-id');p.removeAttribute('data-bucket');p.src=URL.createObjectURL(file);p.load();
+ setStatusState('تم اختيار الملف');status(video?'تم تحميل الفيديو. اضغط تشغيل لسماع مساره الصوتي':'تم تحميل الصوت. اضغط تشغيل');
+ if(ctx&&audioSupported())ensureGraph(p);
 }
 async function saveOriginal(){if(!active){status('اختر ملفاً أولاً');return}await store('original',{...active});status('حُفظت النسخة الأصلية دون أي تعديل');renderLibrary()}
 function applyProfile(id){
@@ -117,10 +128,10 @@ async function renderLibrary(){
  rows.sort((a,b)=>b.created-a.created).forEach(item=>{
   const el=document.createElement('div');el.className='file';const info=document.createElement('div');info.className='grow';
   const nm=document.createElement('div');nm.className='name';nm.textContent=item.name;const mt=document.createElement('div');mt.className='muted';mt.textContent=(item.size/1048576).toFixed(2)+' MB';info.append(nm,mt);
-  const play=document.createElement('button');play.className='btn secondary';const isThis=$('player').dataset.itemId===item.id&&$('player').dataset.bucket===activeTab;
-  play.textContent=isThis&&!$('player').paused?'إيقاف مؤقت':'تشغيل';play.onclick=async()=>{if(isThis&&!$('player').paused){$('player').pause();setStatusState('متوقف مؤقتاً');renderLibrary()}else{active=item;originalBlob=item.blob; $('track').textContent=item.name;$('meta').textContent=(item.size/1048576).toFixed(2)+' MB';const p=$('player');if(p.src)URL.revokeObjectURL(p.src);p.src=URL.createObjectURL(item.blob);p.dataset.itemId=item.id;p.dataset.bucket=activeTab;p.load();await playNow();renderLibrary()}};
+  const play=document.createElement('button');play.className='btn secondary';const itemVideo=item.mediaKind==='video'||(item.type||'').startsWith('video/')||isVideoFile(item);const current=getMediaElement();const isThis=current.dataset.itemId===item.id&&current.dataset.bucket===activeTab;
+  play.textContent=isThis&&!current.paused?'إيقاف مؤقت':'تشغيل';play.onclick=async()=>{if(isThis&&!getMediaElement().paused){getMediaElement().pause();setStatusState('متوقف مؤقتاً');renderLibrary()}else{active=item;originalBlob=item.blob;setActiveMedia(itemVideo);$('track').textContent=item.name;$('meta').textContent=(item.size/1048576).toFixed(2)+' MB';const p=getMediaElement();if(p.src)URL.revokeObjectURL(p.src);p.src=URL.createObjectURL(item.blob);p.dataset.itemId=item.id;p.dataset.bucket=activeTab;p.load();await playNow();renderLibrary()}};
   const share=document.createElement('button');share.className='btn secondary';share.textContent='حفظ / مشاركة';share.onclick=async()=>{try{const file=new File([item.blob],item.name,{type:item.type||'application/octet-stream'});if(navigator.canShare&&navigator.canShare({files:[file]})&&navigator.share)await navigator.share({files:[file],title:item.name});else{const u=URL.createObjectURL(item.blob),a=document.createElement('a');a.href=u;a.download=item.name;a.click();setTimeout(()=>URL.revokeObjectURL(u),30000)}status('تم تجهيز الملف للحفظ أو المشاركة')}catch(e){if(e.name!=='AbortError')status('تعذرت المشاركة: '+e.message)}};
-  const remove=document.createElement('button');remove.className='btn danger';remove.textContent='حذف';remove.onclick=async()=>{if(!confirm('تأكيد حذف '+item.name+'؟'))return;await del(activeTab,item.id);if(isThis){$('player').pause();$('player').removeAttribute('src');$('player').load();active=null;$('track').textContent='لم يتم اختيار ملف'}status('تم حذف الملف من هذا القسم');renderLibrary()};
+  const remove=document.createElement('button');remove.className='btn danger';remove.textContent='حذف';remove.onclick=async()=>{if(!confirm('تأكيد حذف '+item.name+'؟'))return;await del(activeTab,item.id);if(isThis){getMediaElement().pause();getMediaElement().removeAttribute('src');getMediaElement().load();active=null;$('track').textContent='لم يتم اختيار ملف'}status('تم حذف الملف من هذا القسم');renderLibrary()};
   el.append(info,play,share,remove);host.append(el);
  });
 }
@@ -137,6 +148,7 @@ function toggleAB(){
  else{settings={...abSnapshot.settings};abSnapshot.bands.forEach((b,i)=>Object.assign(bands[i],b));abSnapshot=null;renderEQ();syncControls();applyAudio();$('compareAB').textContent='مقارنة الأصل / المعالجة A/B';status('تمت العودة إلى إعدادات المعالجة');}
 }
 async function exportWav(){
+ if(active&&(active.mediaKind==='video'||(active.type||'').startsWith('video/'))){status('تصدير WAV من الفيديو غير متاح حالياً؛ شغّل الفيديو أو استخرج الصوت كملف صوتي أولاً');return}
  if(abSnapshot){settings={...abSnapshot.settings};abSnapshot.bands.forEach((b,i)=>Object.assign(bands[i],b));abSnapshot=null;renderEQ();syncControls();$('compareAB').textContent='مقارنة الأصل / المعالجة A/B';applyAudio()}
  if(!active){status('اختر ملفاً أولاً');return}
  const Offline=window.OfflineAudioContext||window.webkitOfflineAudioContext;if(!Offline){status('هذا المتصفح لا يدعم التصدير الصوتي غير المتصل');return}
@@ -159,11 +171,13 @@ async function backup(){const pack={version:2,original:[],edited:[]};for(const b
 async function restore(file){try{const pack=JSON.parse(await file.text());for(const bucket of ['original','edited'])for(const x of pack[bucket]||[]){const {blobData,...rest}=x;await store(bucket,{...rest,blob:new Blob([new Uint8Array(blobData)],{type:x.type||'application/octet-stream'})})}status('تم استيراد النسخة الاحتياطية');renderLibrary()}catch(e){status('تعذر الاستيراد: '+e.message)}}
 function bind(){
  $('pick').onclick=()=>$('files').click();$('files').onchange=async e=>{for(const f of e.target.files)await loadFile(f);e.target.value=''};
- $('player').addEventListener('play',async()=>{if(audioSupported()){ensureGraph();if(ctx&&ctx.state==='suspended')try{await ctx.resume()}catch(e){}dynamicBassLoop()}setStatusState('يعمل الآن')});
- $('player').addEventListener('pause',()=>{cancelAnimationFrame(raf);setStatusState('متوقف مؤقتاً')});
- $('player').addEventListener('ended',()=>{cancelAnimationFrame(raf);setStatusState('انتهى التشغيل')});
- $('player').addEventListener('error',()=>status('تعذر فك ترميز الملف في Safari؛ جرّب MP3 أو M4A أو WAV'));
- $('playNow').onclick=playNow;$('pauseNow').onclick=()=>$('player').pause();$('compareAB').onclick=toggleAB;$('saveOriginal').onclick=saveOriginal;$('export').onclick=exportWav;
+ for(const el of [$('player'),$('videoPlayer')]){
+  el.addEventListener('play',async()=>{if(audioSupported()){ensureGraph(el);if(ctx&&ctx.state==='suspended')try{await ctx.resume()}catch(e){}dynamicBassLoop()}setStatusState('يعمل الآن')});
+  el.addEventListener('pause',()=>{cancelAnimationFrame(raf);setStatusState('متوقف مؤقتاً')});
+  el.addEventListener('ended',()=>{cancelAnimationFrame(raf);setStatusState('انتهى التشغيل')});
+  el.addEventListener('error',()=>status('تعذر تشغيل هذا الترميز في Safari. جرّب MP3 أو M4A أو MP4 أو MOV مدعوماً'));
+ }
+ $('playNow').onclick=playNow;$('pauseNow').onclick=()=>getMediaElement().pause();$('compareAB').onclick=toggleAB;$('saveOriginal').onclick=saveOriginal;$('export').onclick=exportWav;
  $('volume').oninput=e=>{settings.volume=Number(e.target.value);$('volOut').textContent=Math.round(settings.volume*100)+'%';applyAudio();persist()};
  bindRange('eqQ','q',v=>v.toFixed(1));bindRange('stereoWidth','width',v=>Math.round(v*100)+'%');bindRange('deesser','deesser',v=>v+' dB');bindRange('dynamicBass','dynamicBass',v=>v+' dB');bindRange('compressor','compressor',v=>v+':1');bindRange('masterGain','master',v=>Math.round(v*100)+'%');bindRange('bass','bass',v=>v+' dB');bindRange('limiter','limiter',v=>v+' dB');
  $('headphoneProfile').onchange=e=>applyProfile(e.target.value);
