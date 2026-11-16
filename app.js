@@ -23,6 +23,28 @@ function store(bucket,item){return new Promise((resolve,reject)=>{const tx=db.tr
 function all(bucket){return new Promise((resolve,reject)=>{const tx=db.transaction(bucket);const q=tx.objectStore(bucket).getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)})}
 function del(bucket,id){return new Promise((resolve,reject)=>{const tx=db.transaction(bucket,'readwrite');tx.objectStore(bucket).delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
 function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(16).slice(2)}
+async function registerOfflineSupport(){
+ const badge=$('networkState');
+ const updateNetworkLabel=()=>{
+  if(!badge)return;
+  badge.textContent=navigator.onLine?'متصل • الحفظ محلي':'بدون إنترنت • المكتبة المحلية';
+ };
+ updateNetworkLabel();
+ window.addEventListener('online',updateNetworkLabel);
+ window.addEventListener('offline',updateNetworkLabel);
+ if(!('serviceWorker' in navigator)||!window.isSecureContext){
+  if(badge)badge.textContent=navigator.onLine?'الحفظ محلي • دون اتصال غير مهيأ':'غير متصل';
+  return;
+ }
+ try{
+  const registration=await navigator.serviceWorker.register('/sw.js',{scope:'/'});
+  await navigator.serviceWorker.ready;
+  if(badge)badge.textContent=navigator.onLine?'جاهز للعمل دون اتصال':'بدون إنترنت • الملفات المحلية';
+  registration.update().catch(()=>{});
+ }catch(e){
+  if(badge)badge.textContent=navigator.onLine?'الحفظ محلي • تعذر تجهيز Offline':'غير متصل';
+ }
+}
 function loadSettings(){try{const s=JSON.parse(localStorage.getItem('soundcore-dsp-settings')||'{}');settings={...defaultSettings,...s};const saved=JSON.parse(localStorage.getItem('soundcore-dsp-bands')||'null');if(Array.isArray(saved)&&saved.length===8)saved.forEach((b,i)=>Object.assign(bands[i],b));}catch(e){}}
 function persist(){try{localStorage.setItem('soundcore-dsp-settings',JSON.stringify(settings));localStorage.setItem('soundcore-dsp-bands',JSON.stringify(bands))}catch(e){}}
 function renderEQ(){
@@ -325,5 +347,5 @@ function bind(){
  $('libraryBtn').onclick=()=>{document.querySelector('.tabs').scrollIntoView({behavior:'smooth'});renderLibrary()};
  const drop=$('drop');drop.ondragover=e=>{e.preventDefault();drop.style.borderColor='var(--a)'};drop.ondragleave=()=>drop.style.borderColor='';drop.ondrop=async e=>{e.preventDefault();drop.style.borderColor='';for(const file of Array.from(e.dataTransfer.files))await loadFile(file)};
 }
-(async()=>{loadSettings();renderEQ();syncControls();bind();try{db=await openDB();await renderLibrary();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});}catch(e){status('اختيار وتشغيل الملفات متاح، لكن المحفوظات المحلية غير متاحة في هذا التصفح: '+(e.message||e));}if(!audioSupported())status('المتصفح لا يدعم Web Audio API؛ التشغيل الأصلي متاح دون مؤثرات');})();
+(async()=>{loadSettings();renderEQ();syncControls();bind();registerOfflineSupport();try{db=await openDB();await renderLibrary();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});}catch(e){status('اختيار وتشغيل الملفات متاح، لكن المحفوظات المحلية غير متاحة في هذا التصفح: '+(e.message||e));}if(!audioSupported())status('المتصفح لا يدعم Web Audio API؛ التشغيل الأصلي متاح دون مؤثرات');})();
 })();
