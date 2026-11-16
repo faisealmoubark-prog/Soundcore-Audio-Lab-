@@ -1,0 +1,24 @@
+{
+  "id": "/",
+  "name": "Soundcore Audio Lab",
+  "short_name": "Soundcore",
+  "description": "مختبر صوت محلي لتحسين وتشغيل الملفات الصوتية",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone"
+  ],
+  "background_color": "#090d16",
+  "theme_color": "#090d16",
+  "icons": [
+    {
+      "src": "/icons/soundcore.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
